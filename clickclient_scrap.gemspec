@@ -8,6 +8,7 @@ Gem::Specification.new do |spec|
   spec.files = [
     "README",
     "ChangeLog"
+    "lib/clickclient_scrap.rb"
   ]
   spec.test_files = [
   ]
