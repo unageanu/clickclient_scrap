@@ -73,6 +73,21 @@ module ClickClient
     # 通貨ペア: 米ドル-スイスフラン
     USDCHF = :USDCHF
 
+    # 売買区分: 買い
+    BUY = 0
+    # 売買区分: 売り
+    SELL = 1
+
+    # 注文タイプ: 通常
+    ORDER_TYPE_NORMAL = 0
+    # 注文タイプ: IFD
+    ORDER_TYPE_IFD = 1
+    # 注文タイプ: OCO
+    ORDER_TYPE_OCO = 2
+    # 注文タイプ: IFD-OCO
+    ORDER_TYPE_IFD_OCO = 3
+
+
     #
     #===コンストラクタ
     #
@@ -180,6 +195,65 @@ module ClickClient
              pair = l[0].gsub( /\//, "" ).to_sym
              r[pair]  = Swap.new( pair, l[1].to_i, l[2].to_i ); r
         }
+      end
+      
+      #
+      #注文を行います。
+      #
+      #*currency_pair_code*:: 通貨ペアコード(必須)
+      #*sell_or_buy*:: 売買区分。ClickClient::FX::BUY,ClickClient::FX::SELLのいずれかを指定します。(必須)
+      #*unit*:: 取引数量(必須)
+      #*options*:: 注文のオプション。注文方法に応じて以下の情報を設定できます。
+      #            - <b>通常注文</b> ※注文レートが設定されていれば通常取引となります。
+      #              - <tt>:rate</tt> .. 注文レート(必須)
+      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #<b>戻り値</b>:: ClickClient::FX::OrderResult
+      #
+      def order ( currency_pair_code, sell_or_buy, unit, options={} )
+        result = @client.get_content( @commands["レート一覧(新規注文)"] )
+        if result.toutf8 =~ /<form[~>]?*action="([^"]*)"[~>]*>(.*?<select name="P001"[^>]*>(.*)<\/select>.*?<select name="P100"[^>]*>(.*)<\/select>.*)<\/form>)/m
+          action = $1
+          p001 = $3
+          p100 = $4
+          hidden = $2
+          # 通貨ペア
+          pairs = p001.scan( /<option value="([^"]+)">([A-Z]+\/[A-Z]+)/m ).inject({}) {|r,l|
+             pair = l[1].gsub( /\//, "" ).to_sym
+             r[pair]  = l[0]; r
+          }
+          # 取り引き種別
+          type = p100.scan( /<option value="([^"]+)">([^\s]+)/m ).inject({}) {|r,l|
+             r[l[1]]  = l[0]; r
+          }
+          # hidden
+          params = hidden.scan( /<input type="hidden" name="([^"]+)" value="([^"]+)">/m ).inject({}) {|r,l|
+             r[l[1]]  = l[0]; r
+          }
+        end
+#        if ( options[:rate] != nil )
+#          if ( options[:stop_order_rate] != nil )
+#            # 逆指値レートが指定されていればOCO取引
+#            path = "/ws/fx/ocoChumon.do"
+#            body << "&srp=#{options[:rate].to_s}"
+#            body << "&grp=#{options[:stop_order_rate].to_s}"
+#          else
+#            # そうでなければ通常取引
+#            raise "options[:execution_expression] is required." if options[:execution_expression] == nil
+#            path = "/ws/fx/tsujoChumon.do"
+#            body << "&crp=#{options[:rate].to_s}"
+#            body << "&sjt=#{options[:execution_expression].to_s}"
+#          end
+#          raise "options[:expiration_type] is required." if options[:expiration_type] == nil
+#          body << "&bbt=#{sell_or_buy.to_s}"
+#          body << "&thn=#{unit.to_s}"
+#          body << "&dat=#{options[:expiration_type].to_s}"
+#          body << "&ykd=" << options[:expiration_date].strftime( "%Y%m%d%H" ) if options[:expiration_date] != nil
+#        end
+#        result = @client.post( @base_uri + path, body)
+#        doc = ClickClient.parse( result.content )
+#        return OrderResult.new( doc.root )
       end
       
       # ログアウトします。
