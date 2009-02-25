@@ -7,7 +7,7 @@ Gem::Specification.new do |spec|
   spec.homepage = "http://github.com/unageanu/clickclient_scrap/tree/master"
   spec.files = [
     "README",
-    "ChangeLog"
+    "ChangeLog",
     "lib/clickclient_scrap.rb"
   ]
   spec.test_files = [
