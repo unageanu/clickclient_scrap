@@ -2,8 +2,7 @@ begin
   require 'rubygems'
 rescue LoadError
 end
-require 'httpclient'
-require 'rexml/document'
+require 'mechanize'
 require 'date'
 require 'kconv'
 
@@ -16,11 +15,6 @@ require 'kconv'
 #クリック証券を利用するためのクライアントライブラリです。携帯向けサイトのスクレイピングにより以下の機能を提供します。
 #- 外為証拠金取引(FX)取引
 #
-#====依存モジュール
-#「{httpclient}[http://dev.ctor.org/http-access2]」を利用しています。以下のコマンドを実行してインストールしてください。
-#
-# gem install httpclient --source http://dev.ctor.org/download/
-#
 #====基本的な使い方
 #
 # require 'clickclient'
@@ -29,7 +23,7 @@ require 'kconv'
 # # c = ClickClient::Client.new https://<プロキシホスト>:<プロキシポート> # プロキシを利用する場合
 # c.fx_session( "<ユーザー名>", "<パスワード>" ) { | fx_session |
 #   # 通貨ペア一覧取得
-#   list = fx_session.list_currency_pairs
+#   list = fx_session.list_rates
 #   puts list
 # } 
 #
@@ -42,7 +36,7 @@ module ClickClient
   # クライアント
   class Client
     # ホスト名
-    DEFAULT_HOST_NAME = "https://sec-sso.click-sec.com/mf"
+    DEFAULT_HOST_NAME = "https://sec-sso.click-sec.com/mf/"
 
     # 通貨ペア: 米ドル-円
     USDJPY = :USDJPY
@@ -95,9 +89,14 @@ module ClickClient
     # 例) https://proxyhost.com:80
     #
     def initialize( proxy=nil  )
-      @client = HTTPClient.new( proxy, "Mozilla/5.0")
-      #@client.debug_dev=STDOUT
-      @client.set_cookie_store("cookie.dat")
+      @client = WWW::Mechanize.new {|c|
+        # プロキシ
+        if proxy 
+          uri = URI.parse( proxy )
+          c.set_proxy( uri.host, uri.port )
+        end
+      }
+      @client.user_agent_alias = 'Windows IE 7'
       @host_name = DEFAULT_HOST_NAME
     end
 
@@ -108,22 +107,14 @@ module ClickClient
     #戻り値:: ClickClient::FX::CurrencyPairの配列。
     #戻り値:: ClickClient::FX::CurrencyPairの配列。
     def fx_session( userid, password, &block )
-      @client.get("#{@host_name}/" )
-      result = @client.post_content("#{@host_name}/sso-redirect", {
-        "j_username"=>userid, 
-        "j_password"=>password,
-        "LoginForm"=>"ログイン".tosjis,
-        "s"=>"02",
-        "p"=>"80"
-      })
-      if result.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
-         uri = URI.parse( $1 )
-         base = "#{uri.scheme}://#{uri.host}:#{uri.port}"
-         result = @client.get_content($1)
-         commands = result.toutf8.scan( /<a[^>]*?href="([^"]*)"[^>]*>([^<]*)<\/a>/).inject({}) {|r,l|
-           r[l[1]] = "#{base}#{l[0]}"; r
-         }
-         session = FX::FxSession.new( @client, commands )
+      page = @client.get(@host_name)
+      form = page.forms.first
+      form.j_username = USER
+      form.j_password = PASS
+      result = @client.submit(form, form.buttons.first) 
+      if result.body.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
+         result = @client.get($1)
+         session = FX::FxSession.new( @client, result.links )
          if block_given?
            begin
              yield session
@@ -148,18 +139,21 @@ module ClickClient
     #Client#fx_sessionのブロックの引数として渡されます。詳細はClient#fx_sessionを参照ください。
     class FxSession
       
-      def initialize( client, commands )
+      def initialize( client, links )
         @client = client
-        @commands = commands
+        @links = links
       end
+      
       #レート一覧を取得します。
       #
       #戻り値:: 通貨ペアをキーとするClickClient::FX::Rateのハッシュ。
       def list_rates
-        result = @client.get_content( @commands["レート一覧(新規注文)"] )
+        result =  @client.click( @links.find {|i|
+            i.attributes["accesskey"] == "1"
+        })
         @swaps = list_swaps unless @swaps
         reg = />([A-Z]+\/[A-Z]+)<\/a>[^\-\.\d]*?([\d]+\.[\d]+\-[\d]+)/
-        return  result.toutf8.scan( reg ).inject({}) {|r,l|
+        return  result.body.toutf8.scan( reg ).inject({}) {|r,l|
              pair = l[0].gsub( /\//, "" ).to_sym
              swap = @swaps[pair]
              rate = FxSession.convert_rate l[1]
@@ -189,76 +183,21 @@ module ClickClient
       #
       #戻り値:: 通貨ペアをキーとするClickClient::FX::Swapのハッシュ。
       def list_swaps
-        result = @client.get_content( @commands["スワップ/証拠金一覧"] ) 
+        result =  @client.click( @links.find {|i|
+            i.attributes["accesskey"] == "8"
+        })
         reg = /<dd>([A-Z]+\/[A-Z]+) <font[^>]*>売<\/font>[^\-\d]*?([\-\d]+)[^\-\d]*<font[^>]*>買<\/font>[^\-\d]*([\-\d]+)[^\-\d]*<\/dd>/
-        return  result.toutf8.scan( reg ).inject({}) {|r,l|
+        return  result.body.toutf8.scan( reg ).inject({}) {|r,l|
              pair = l[0].gsub( /\//, "" ).to_sym
              r[pair]  = Swap.new( pair, l[1].to_i, l[2].to_i ); r
         }
       end
       
-      #
-      #注文を行います。
-      #
-      #*currency_pair_code*:: 通貨ペアコード(必須)
-      #*sell_or_buy*:: 売買区分。ClickClient::FX::BUY,ClickClient::FX::SELLのいずれかを指定します。(必須)
-      #*unit*:: 取引数量(必須)
-      #*options*:: 注文のオプション。注文方法に応じて以下の情報を設定できます。
-      #            - <b>通常注文</b> ※注文レートが設定されていれば通常取引となります。
-      #              - <tt>:rate</tt> .. 注文レート(必須)
-      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
-      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
-      #<b>戻り値</b>:: ClickClient::FX::OrderResult
-      #
-      def order ( currency_pair_code, sell_or_buy, unit, options={} )
-        result = @client.get_content( @commands["レート一覧(新規注文)"] )
-        if result.toutf8 =~ /<form[~>]?*action="([^"]*)"[~>]*>(.*?<select name="P001"[^>]*>(.*)<\/select>.*?<select name="P100"[^>]*>(.*)<\/select>.*)<\/form>)/m
-          action = $1
-          p001 = $3
-          p100 = $4
-          hidden = $2
-          # 通貨ペア
-          pairs = p001.scan( /<option value="([^"]+)">([A-Z]+\/[A-Z]+)/m ).inject({}) {|r,l|
-             pair = l[1].gsub( /\//, "" ).to_sym
-             r[pair]  = l[0]; r
-          }
-          # 取り引き種別
-          type = p100.scan( /<option value="([^"]+)">([^\s]+)/m ).inject({}) {|r,l|
-             r[l[1]]  = l[0]; r
-          }
-          # hidden
-          params = hidden.scan( /<input type="hidden" name="([^"]+)" value="([^"]+)">/m ).inject({}) {|r,l|
-             r[l[1]]  = l[0]; r
-          }
-        end
-#        if ( options[:rate] != nil )
-#          if ( options[:stop_order_rate] != nil )
-#            # 逆指値レートが指定されていればOCO取引
-#            path = "/ws/fx/ocoChumon.do"
-#            body << "&srp=#{options[:rate].to_s}"
-#            body << "&grp=#{options[:stop_order_rate].to_s}"
-#          else
-#            # そうでなければ通常取引
-#            raise "options[:execution_expression] is required." if options[:execution_expression] == nil
-#            path = "/ws/fx/tsujoChumon.do"
-#            body << "&crp=#{options[:rate].to_s}"
-#            body << "&sjt=#{options[:execution_expression].to_s}"
-#          end
-#          raise "options[:expiration_type] is required." if options[:expiration_type] == nil
-#          body << "&bbt=#{sell_or_buy.to_s}"
-#          body << "&thn=#{unit.to_s}"
-#          body << "&dat=#{options[:expiration_type].to_s}"
-#          body << "&ykd=" << options[:expiration_date].strftime( "%Y%m%d%H" ) if options[:expiration_date] != nil
-#        end
-#        result = @client.post( @base_uri + path, body)
-#        doc = ClickClient.parse( result.content )
-#        return OrderResult.new( doc.root )
-      end
-      
       # ログアウトします。
       def logout
-        @client.get_content( @commands["ログアウト"] ) 
+        @client.click( @links.find {|i|
+            i.text == "\303\233\302\270\303\236\302\261\302\263\303\204"
+        })
       end
     end
     
