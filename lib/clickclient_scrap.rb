@@ -104,13 +104,13 @@ module ClickClient
     #-ブロックを指定した場合、引数としてセッションを指定してブロックを実行します。ブロック実行後、ログアウトします。
     #-そうでない場合、セッションを返却します。この場合、ClickClient::FX::FxSession#logoutを実行しログアウトしてください。
     #
-    #戻り値:: ClickClient::FX::CurrencyPairの配列。
-    #戻り値:: ClickClient::FX::CurrencyPairの配列。
+    #戻り値:: ClickClient::FX::FxSession
     def fx_session( userid, password, &block )
       page = @client.get(@host_name)
+      ClickClient::Client.error(page)  if page.forms.length <= 0
       form = page.forms.first
-      form.j_username = USER
-      form.j_password = PASS
+      form.j_username = userid
+      form.j_password = password
       result = @client.submit(form, form.buttons.first) 
       if result.body.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
          result = @client.get($1)
@@ -125,9 +125,12 @@ module ClickClient
            return session
          end
       else
-        error = result.toutf8 =~ /<font color="red">([^<]*)</ ? $1.strip : result
-        raise "login failed.detail=#{error}".toutf8 
+        ClickClient::Client.error( result )
       end
+    end
+    def self.error( page )
+        error = page.body.toutf8 =~ /<font color="red">([^<]*)</ ? $1.strip : page.body
+        raise "login failed.detail=#{error}".toutf8 
     end
     
     #ホスト名
