@@ -85,8 +85,9 @@ module ClickClient
       end
     end
     def self.error( page )
-        error = page.body.toutf8 =~ /<font color="red">([^<]*)</ ? $1.strip : page.body
-        raise "login failed.detail=#{error}".toutf8 
+        msgs = page.body.scan( /<font color="red">([^<]*)</ ).flatten
+        error = !msgs.empty? ? msgs.map{|m| m.strip}.join(",") : page.body
+        raise "operation failed.detail=#{error}".toutf8 
     end
     
     #ホスト名
@@ -319,18 +320,36 @@ module ClickClient
         
         # 詳細設定画面へ
         result = @client.submit(form) 
-        #puts result.body.toutf8
         form = result.forms.first
         form["P003"] = options[:rate].to_s # レート
         form["P005"] = unit.to_s # 取り引き数量
         form["P002.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い
-        # TODO 指値/逆指値の指定
-        # TODO 有効期限の指定
+        
+        exp =  options[:execution_expression]
+        form["P004.0"] = exp  == ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER ? "2" : "1" #指値/逆指値
+        
+        # 有効期限
+        case options[:expiration_type]
+          when ClickClient::FX::EXPIRATION_TYPE_TODAY
+              form["P008"] = "0"
+          when ClickClient::FX::EXPIRATION_TYPE_WEEK_END
+              form["P008"] = "1"
+          when ClickClient::FX::EXPIRATION_TYPE_SPECIFIED
+              form["P008"] = "3"
+              raise "options[:expiration_date] is required." unless options[:expiration_date]
+              form["P009.Y"] = options[:expiration_date].year
+              form["P009.M"] = options[:expiration_date].month
+              form["P009.D"] = options[:expiration_date].day
+              form["P009.h"] = options[:expiration_date].respond_to?(:hour) ? options[:expiration_date].hour : "0"
+          else
+              form["P008"] = "2"
+        end
         
         # 確認画面へ
         result = @client.submit(form) 
         result = @client.submit(result.forms.first)
         #puts result.body.toutf8
+        ClickClient::Client.error( result ) unless result.body.toutf8 =~ /注文受付完了/
         # TODO 結果を返す・・・どうするかな。
       end
       

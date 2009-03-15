@@ -19,20 +19,29 @@ c.fx_session( USER, PASS ) {|session|
   }
   
   ## 指値注文
-  # 買い
   session.order( ClickClient::FX::EURJPY, ClickClient::FX::BUY, 1, {
     :rate=>rates[ClickClient::FX::EURJPY].ask_rate - 0.5, # 指値レート
-    #  執行条件と有効期限指定は未サポートです。(指定しないとエラーになるけど)
-    :execution_expression=>ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER, # 執行条件: 指値 
-    :expiration_type=>ClickClient::FX::EXPIRATION_TYPE_TODAY  # 有効期限: 当日限り 
-  }) 
-  # 売り
-  session.order( ClickClient::FX::EURJPY, ClickClient::FX::SELL, 1, {
-    :rate=>rates[ClickClient::FX::EURJPY].ask_rate + 0.5, # 指値レート
-    #  執行条件と有効期限指定は未サポートです。(指定しないとエラーになるけど)
     :execution_expression=>ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER, # 執行条件: 指値 
     :expiration_type=>ClickClient::FX::EXPIRATION_TYPE_TODAY  # 有効期限: 当日限り 
   })
-  
+  session.order( ClickClient::FX::EURJPY, ClickClient::FX::SELL, 1, {
+    :rate=>rates[ClickClient::FX::EURJPY].ask_rate + 0.5, # 指値レート
+    :execution_expression=>ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER, # 執行条件: 指値 
+    :expiration_type=>ClickClient::FX::EXPIRATION_TYPE_WEEK_END  # 有効期限: 週末まで
+  })
+
+  # 逆指値注文
+  session.order( ClickClient::FX::EURJPY, ClickClient::FX::BUY, 1, {
+    :rate=>rates[ClickClient::FX::EURJPY].ask_rate + 0.5, # 逆指値レート
+    :execution_expression=>ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER, # 執行条件: 逆指値 
+    :expiration_type=>ClickClient::FX::EXPIRATION_TYPE_INFINITY  # 有効期限: 無限
+  }) 
+  session.order( ClickClient::FX::EURJPY, ClickClient::FX::SELL, 1, {
+    :rate=>rates[ClickClient::FX::EURJPY].ask_rate - 0.5, # 逆指値レート
+    :execution_expression=>ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER, # 執行条件: 逆指値 
+    :expiration_type=>ClickClient::FX::EXPIRATION_TYPE_SPECIFIED,  # 有効期限: 指定
+    :expiration_date=>Date.today+2 # 2日後
+  })
+
   # 注文のキャンセルをお忘れなく。
 }
