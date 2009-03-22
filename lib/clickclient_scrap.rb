@@ -140,13 +140,6 @@ module ClickClient
     ORDER_TYPE_OCO = "21"
     # 注文タイプ: IFD-OCO
     ORDER_TYPE_IFD_OCO = "31"
-    
-    # 執行条件: 成行
-    EXECUTION_EXPRESSION_MARKET_ORDER = 0
-    # 執行条件: 指値
-    EXECUTION_EXPRESSION_LIMIT_ORDER = 1
-    # 執行条件: 逆指値
-    EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER = 2
 
     # 有効期限: 当日限り
     EXPIRATION_TYPE_TODAY = 0
@@ -156,6 +149,29 @@ module ClickClient
     EXPIRATION_TYPE_INFINITY = 2
     # 有効期限: 日付指定
     EXPIRATION_TYPE_SPECIFIED = 3
+    
+    # 注文状況: すべて
+    ORDER_CONDITION_ALL = ""
+    # 注文状況: 注文中
+    ORDER_CONDITION_ON_ORDER = "0"
+    # 注文状況: 取消済
+    ORDER_CONDITION_CANCELED = "1"
+    # 注文状況: 約定
+    ORDER_CONDITION_EXECUTION = "2"
+    # 注文状況: 不成立
+    ORDER_CONDITION_FAILED = "3"
+    
+    # トレード種別: 新規
+    TRADE_TYPE_NEW = "新規"
+    # トレード種別: 決済
+    TRADE_TYPE_SETTLEMENT = "決済"
+    
+    # 執行条件: 成行
+    EXECUTION_EXPRESSION_MARKET_ORDER = "成行"
+    # 執行条件: 指値
+    EXECUTION_EXPRESSION_LIMIT_ORDER = "指値"
+    # 執行条件: 逆指値
+    EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER = "逆指値"
     
     #=== FX取引のためのセッションクラス
     #Client#fx_sessionのブロックの引数として渡されます。詳細はClient#fx_sessionを参照ください。
@@ -353,6 +369,46 @@ module ClickClient
         # TODO 結果を返す・・・どうするかな。
       end
       
+      
+      #
+      #=== 注文一覧を取得します。
+      #
+      #*order_condition_code*:: 注文状況コード(必須)
+      #*currency_pair_code*:: 通貨ペアコード
+      #<b>戻り値</b>:: 注文番号をキーとするClickClient::FX::Orderのハッシュ。
+      #
+      def list_orders(  order_condition_code=ClickClient::FX::ORDER_CONDITION_ALL, currency_pair_code=nil )
+        
+        result =  @client.click( @links.find {|i|
+            i.attributes["accesskey"] == "2"
+        })
+        form = result.forms.first
+        form["P001"] = "" # TODO currency_pair_codeでの絞り込み
+        form["P002"] = order_condition_code
+        #puts result.body.toutf8
+        list = result.body.toutf8.scan( /<a href="[^"]*GKEY=([a-zA-Z0-9]*)">([A-Z]{3}\/[A-Z]{3}) ([^<]*)<\/a><br>[^;]*;([^<]*)<font[^>]*>([^<]*)<\/font>([^@]*)@([\d\.]*)([^\s]*) ([^<]*)<br>/m )
+        tmp = {}
+        list.each {|i|
+          order_no = i[0] 
+          order_type = to_order_type_code(i[2])
+          trade_type = i[3] == "新" ? ClickClient::FX::TRADE_TYPE_NEW : ClickClient::FX::TRADE_TYPE_SETTLEMENT
+          pair = to_pair( i[1] )
+          sell_or_buy = i[4] == "売" ?  ClickClient::FX::SELL : ClickClient::FX::BUY
+          count =  pair == :ZARJPY ?  i[5].to_i/10 : i[5].to_i
+          rate =  i[6].to_f
+          execution_expression = if i[7] == "指"
+            ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
+          elsif i[7] == "逆"
+            ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
+          else
+            ClickClient::FX::EXECUTION_EXPRESSION_MARKET_ORDER
+          end
+          tmp[order_no] = Order.new( order_no, trade_type, order_type, execution_expression, sell_or_buy, pair, count, rate, i[8])
+        }
+        return tmp
+      end
+      
+      
       # ログアウトします。
       def logout
         @client.click( @links.find {|i|
@@ -360,17 +416,38 @@ module ClickClient
         })
       end
       
-      private
-        # "USD/JPY"を:USDJPYのようなシンボルに変換します。
-        def to_pair( str )
-          str.gsub( /\//, "" ).to_sym
+    private
+      # "USD/JPY"を:USDJPYのようなシンボルに変換します。
+      def to_pair( str )
+        str.gsub( /\//, "" ).to_sym
+      end
+      
+      # 注文種別を注文種別コードに変換します。
+      def to_order_type_code( order_type )
+        return  case order_type
+          when "成行注文"
+            ClickClient::FX::ORDER_TYPE_MARKET_ORDER
+          when "通常注文"
+            ClickClient::FX::ORDER_TYPE_NORMAL
+          when "OCO注文"
+            ClickClient::FX::ORDER_TYPE_OCO
+          when "IFD注文"
+            ClickClient::FX:: ORDER_TYPE_IFD
+          when "IFD-OCO注文"
+            ClickClient::FX:: ORDER_TYPE_IFD_OCO
+          else
+            raise "illegal order_type. order_type=#{order_type}"
         end
+      end
     end
     
     #=== スワップ
     Swap = Struct.new(:pair, :sell_swap, :buy_swap)
     #=== レート
     Rate = Struct.new(:pair, :bid_rate, :ask_rate, :sell_swap, :buy_swap )
+    #===注文
+    Order = Struct.new(:order_no, :trade_type, :order_type, :execution_expression, :sell_or_buy, :pair,  :count, :rate, :order_state )
+    
   end
 end
 
