@@ -239,8 +239,7 @@ module ClickClient
       #unit:: 取引数量(必須)
       #options:: 注文のオプション。注文方法に応じて以下の情報を設定できます。
       #            - <b>成り行き注文</b>
-      #              - <tt>:slippage</tt> .. スリッページ (オプション)
-      #              - <tt>:slippage_base_rate</tt> .. スリッページの基準となる取引レート(スリッページが指定された場合、必須。)
+      #              - <tt>:slippage</tt> .. スリッページ (オプション)。何pips以内かを整数で指定します。
       #            - <b>通常注文</b> ※注文レートが設定されていれば通常取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
       #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
@@ -281,7 +280,7 @@ module ClickClient
         
         # 取り引き種別の判別とパラメータチェック
         type = ORDER_TYPE_MARKET_ORDER
-        if ( options[:settle] != nil  )
+        if ( options && options[:settle] != nil  )
           if ( options[:settle][:stop_order_rate] != nil)
              # 逆指値レートと決済取引の指定があればIFD-OCO取引
              raise "options[:settle][:rate] is required." if options[:settle][:rate] == nil
@@ -299,7 +298,7 @@ module ClickClient
           raise "options[:settle][:sell_or_buy] is required." if options[:settle][:sell_or_buy] == nil
           raise "options[:settle][:unit] is required." if options[:settle][:unit] == nil
           raise "options[:settle][:expiration_type] is required." if options[:expiration_type] == nil
-        elsif ( options[:rate] != nil )
+        elsif ( options && options[:rate] != nil )
           if ( options[:stop_order_rate] != nil )
             # 逆指値レートが指定されていればOCO取引
             type = ORDER_TYPE_OCO
@@ -312,12 +311,8 @@ module ClickClient
         else
           # 成り行き
           type = ORDER_TYPE_MARKET_ORDER
-          if ( options[:slippage] != nil )
-            raise "if you use a slippage,  options[:slippage_base_rate] is required." if options[:slippage_base_rate] == nil
-          end
         end
-        raise "not supported yet." if type != ORDER_TYPE_NORMAL
-        
+
         # レート一覧
         result =  @client.click( @links.find {|i|
             i.attributes["accesskey"] == "1"
@@ -337,28 +332,29 @@ module ClickClient
         # 詳細設定画面へ
         result = @client.submit(form) 
         form = result.forms.first
-        form["P003"] = options[:rate].to_s # レート
-        form["P005"] = unit.to_s # 取り引き数量
-        form["P002.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い
-        
-        exp =  options[:execution_expression]
-        form["P004.0"] = exp  == ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER ? "2" : "1" #指値/逆指値
-        
-        # 有効期限
-        case options[:expiration_type]
-          when ClickClient::FX::EXPIRATION_TYPE_TODAY
-              form["P008"] = "0"
-          when ClickClient::FX::EXPIRATION_TYPE_WEEK_END
-              form["P008"] = "1"
-          when ClickClient::FX::EXPIRATION_TYPE_SPECIFIED
-              form["P008"] = "3"
-              raise "options[:expiration_date] is required." unless options[:expiration_date]
-              form["P009.Y"] = options[:expiration_date].year
-              form["P009.M"] = options[:expiration_date].month
-              form["P009.D"] = options[:expiration_date].day
-              form["P009.h"] = options[:expiration_date].respond_to?(:hour) ? options[:expiration_date].hour : "0"
+        case type
+          when ORDER_TYPE_MARKET_ORDER
+            # 成り行き
+            form["P002"] = unit.to_s # 取り引き数量
+            form["P005.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い  
+            form["P007"] = options[:slippage].to_s if ( options && options[:slippage] != nil ) # スリッページ
+          when ORDER_TYPE_NORMAL
+            # 指値
+            form["P003"] = options[:rate].to_s # レート
+            form["P005"] = unit.to_s # 取り引き数量
+            form["P002.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い
+            exp =  options[:execution_expression]
+            form["P004.0"] = exp  == ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER ? "2" : "1" #指値/逆指値
+            set_expiration( form,  options, "P008", "P009" ) # 有効期限
+          when ORDER_TYPE_OCO
+            # OCO
+            form["P003"] = options[:rate].to_s # レート
+            form["P005"] = options[:stop_order_rate].to_s # 逆指値レート
+            form["P007"] = unit.to_s # 取り引き数量
+            form["P002.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い
+            set_expiration( form,  options, "P010", "P011" ) # 有効期限
           else
-              form["P008"] = "2"
+            raise "not supported yet."
         end
         
         # 確認画面へ
@@ -369,13 +365,35 @@ module ClickClient
         # TODO 結果を返す・・・どうするかな。
       end
       
+      # 有効期限を設定する
+      #form:: フォーム
+      #options:: パラメータ
+      #input_type:: 有効期限の種別を入力するinput要素名
+      #input_date:: 有効期限が日付指定の場合に、日付を入力するinput要素名
+      def set_expiration( form,  options, input_type, input_date )
+        case options[:expiration_type]
+          when ClickClient::FX::EXPIRATION_TYPE_TODAY
+              form[input_type] = "0"
+          when ClickClient::FX::EXPIRATION_TYPE_WEEK_END
+              form[input_type] = "1"
+          when ClickClient::FX::EXPIRATION_TYPE_SPECIFIED
+              form[input_type] = "3"
+              raise "options[:expiration_date] is required." unless options[:expiration_date]
+              form["#{input_date}.Y"] = options[:expiration_date].year
+              form["#{input_date}.M"] = options[:expiration_date].month
+              form["#{input_date}.D"] = options[:expiration_date].day
+              form["#{input_date}.h"] = options[:expiration_date].respond_to?(:hour) ? options[:expiration_date].hour : "0"
+          else
+              form[input_type] = "2"
+        end
+      end
       
       #
       #=== 注文一覧を取得します。
       #
-      #*order_condition_code*:: 注文状況コード(必須)
-      #*currency_pair_code*:: 通貨ペアコード
-      #<b>戻り値</b>:: 注文番号をキーとするClickClient::FX::Orderのハッシュ。
+      #order_condition_code:: 注文状況コード(必須)
+      #currency_pair_code:: 通貨ペアコード
+      #戻り値:: 注文番号をキーとするClickClient::FX::Orderのハッシュ。
       #
       def list_orders(  order_condition_code=ClickClient::FX::ORDER_CONDITION_ALL, currency_pair_code=nil )
         
