@@ -5,6 +5,7 @@ end
 require 'mechanize'
 require 'date'
 require 'kconv'
+require 'set'
 
 #
 #=== クリック証券アクセスクライアント
@@ -274,7 +275,7 @@ module ClickClient
       #                - <tt>:stop_order_rate</tt> .. 決済取引の逆指値レート(必須)
       #                - <tt>:expiration_type</tt> .. 決済取引の有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
       #                - <tt>:expiration_date</tt> .. 決済取引の有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
-      #戻り値:: ClickClient::FX::OrderResult TODO
+      #戻り値:: ClickClient::FX::OrderResult
       #
       def order ( currency_pair_code, sell_or_buy, unit, options={} )
         
@@ -312,7 +313,10 @@ module ClickClient
           # 成り行き
           type = ORDER_TYPE_MARKET_ORDER
         end
-
+        
+        #注文前の注文一覧
+        before = list_orders( ORDER_CONDITION_ON_ORDER ).inject(Set.new) {|s,o| s << o[0]; s }
+        
         # レート一覧
         result =  @client.click( @links.find {|i|
             i.attributes["accesskey"] == "1"
@@ -360,9 +364,11 @@ module ClickClient
         # 確認画面へ
         result = @client.submit(form) 
         result = @client.submit(result.forms.first)
-        #puts result.body.toutf8
         ClickClient::Client.error( result ) unless result.body.toutf8 =~ /注文受付完了/
-        # TODO 結果を返す・・・どうするかな。
+        
+        #注文前の一覧と注文後の一覧を比較して注文を割り出す。
+        tmp = list_orders( ORDER_CONDITION_ON_ORDER ).find {|o| !before.include?(o[0]) }[1]
+        return OrderResult.new( tmp.order_no )
       end
       
       # 有効期限を設定する
@@ -389,6 +395,39 @@ module ClickClient
       end
       
       #
+      #=== 注文をキャンセルします。
+      #
+      #order_no:: 注文番号
+      #戻り値:: なし
+      #
+      def cancel_order( order_no ) 
+        
+        raise "order_no is nil." unless order_no
+        
+        # 注文一覧
+        result =  @client.click( @links.find {|i|
+            i.attributes["accesskey"] == "2"
+        })
+        form = result.forms.first
+        form["P002"] = ORDER_CONDITION_ON_ORDER
+        result = @client.submit(form)
+        
+        # 対象となる注文をクリック 
+        link =  result.links.find {|l|
+            l.href =~ /[^"]*GKEY=([a-zA-Z0-9]*)[^"]*/ && $1 == order_no
+        }
+        raise "illegal order_no. order_no=#{order_no}" unless link
+        result =  @client.click(link)
+        
+        # キャンセル
+        form = result.forms[1]
+        result = @client.submit(form)
+        form = result.forms.first
+        result = @client.submit(form)
+        ClickClient::Client.error( result ) unless result.body.toutf8 =~ /注文取消受付完了/
+      end
+      
+      #
       #=== 注文一覧を取得します。
       #
       #order_condition_code:: 注文状況コード(必須)
@@ -403,7 +442,8 @@ module ClickClient
         form = result.forms.first
         form["P001"] = "" # TODO currency_pair_codeでの絞り込み
         form["P002"] = order_condition_code
-        #puts result.body.toutf8
+        result = @client.submit(form) 
+        
         list = result.body.toutf8.scan( /<a href="[^"]*GKEY=([a-zA-Z0-9]*)">([A-Z]{3}\/[A-Z]{3}) ([^<]*)<\/a><br>[^;]*;([^<]*)<font[^>]*>([^<]*)<\/font>([^@]*)@([\d\.]*)([^\s]*) ([^<]*)<br>/m )
         tmp = {}
         list.each {|i|
@@ -429,9 +469,12 @@ module ClickClient
       
       # ログアウトします。
       def logout
-        @client.click( @links.find {|i|
-            i.text == "\303\233\302\270\303\236\302\261\302\263\303\204"
-        })
+        begin
+          @client.click( @links.find {|i|
+              i.text == "\303\233\302\270\303\236\302\261\302\263\303\204"
+          })
+        rescue
+        end 
       end
       
     private
@@ -465,6 +508,8 @@ module ClickClient
     Rate = Struct.new(:pair, :bid_rate, :ask_rate, :sell_swap, :buy_swap )
     #===注文
     Order = Struct.new(:order_no, :trade_type, :order_type, :execution_expression, :sell_or_buy, :pair,  :count, :rate, :order_state )
+    #===注文結果
+    OrderResult = Struct.new(:order_no )
     
   end
 end
