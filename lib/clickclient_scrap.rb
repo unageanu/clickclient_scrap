@@ -367,8 +367,9 @@ module ClickClient
         ClickClient::Client.error( result ) unless result.body.toutf8 =~ /注文受付完了/
         
         #注文前の一覧と注文後の一覧を比較して注文を割り出す。
-        tmp = list_orders( ORDER_CONDITION_ON_ORDER ).find {|o| !before.include?(o[0]) }[1]
-        return OrderResult.new( tmp.order_no )
+        #成り行き注文の場合、即座に約定するのでnilになる(タイミングによっては取得できるかも)
+        tmp = list_orders( ORDER_CONDITION_ON_ORDER ).find {|o| !before.include?(o[0]) }
+        return OrderResult.new( tmp ? tmp[1].order_no : nil )
       end
       
       # 有効期限を設定する
@@ -466,6 +467,34 @@ module ClickClient
         return tmp
       end
       
+      #
+      #=== 建玉一覧を取得します。
+      #
+      #currency_pair_code:: 通貨ペアコード
+      #戻り値:: 建玉IDをキーとするClickClient::FX::OpenInterestのハッシュ。
+      #
+      def  list_open_interests( currency_pair_code=nil ) 
+        
+        result =  @client.click( @links.find {|i|
+            i.attributes["accesskey"] == "3"
+        })
+        form = result.forms.first
+        form["P001"] = "" # TODO currency_pair_codeでの絞り込み
+        result = @client.submit(form) 
+        
+        list = result.body.toutf8.scan( /<a href="[^"]*">([A-Z]{3}\/[A-Z]{3}):([^<]*)<\/a><br>[^;]*;<font[^>]*>([^<]*)<\/font>([\d\.]*)[^\s@]*@([\d\.]*).*?<font[^>]*>([^<]*)<\/font>/m )
+        tmp = {}
+        list.each {|i|
+          open_interest_id = i[1] 
+          pair = to_pair( i[0] )
+          sell_or_buy = i[2] == "売" ?  ClickClient::FX::SELL : ClickClient::FX::BUY
+          count =  i[3].to_i
+          rate =  i[4].to_f
+          profit_or_loss =  i[5].to_i
+          tmp[open_interest_id] = OpenInterest.new(open_interest_id, pair, sell_or_buy, count, rate, profit_or_loss  )
+        }
+        return tmp
+      end
       
       # ログアウトします。
       def logout
@@ -510,7 +539,8 @@ module ClickClient
     Order = Struct.new(:order_no, :trade_type, :order_type, :execution_expression, :sell_or_buy, :pair,  :count, :rate, :order_state )
     #===注文結果
     OrderResult = Struct.new(:order_no )
-    
+    #===建玉
+    OpenInterest = Struct.new(:open_interest_id, :pair, :sell_or_buy, :count, :rate, :profit_or_loss  )
   end
 end
 
