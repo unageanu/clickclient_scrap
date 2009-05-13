@@ -428,6 +428,74 @@ module ClickClient
         ClickClient::Client.error( result ) unless result.body.toutf8 =~ /注文取消受付完了/
       end
       
+      
+      #
+      #=== 決済注文を行います。
+      #
+      #*open_interest_id*:: 決済する建玉番号
+      #*unit*:: 取引数量
+      #*options*:: 決済注文のオプション。注文方法に応じて以下の情報を設定できます。
+      #            - <b>成り行き注文</b>
+      #              - <tt>:slippage</tt> .. スリッページ (オプション)
+      #              - <tt>:slippage_base_rate</tt> .. スリッページの基準となる取引レート(スリッページが指定された場合、必須。)
+      #            - <b>通常注文</b> ※注文レートが設定されていれば通常取引となります。
+      #              - <tt>:rate</tt> .. 注文レート(必須)
+      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #            - <b>OCO注文</b> ※注文レートと逆指値レートが設定されていればOCO取引となります。
+      #              - <tt>:rate</tt> .. 注文レート(必須)
+      #              - <tt>:stop_order_rate</tt> .. 逆指値レート(必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #<b>戻り値</b>:: なし
+      #
+      def settle ( open_interest_id, unit, options={} )
+        if ( options[:rate] != nil && options[:stop_order_rate] != nil )
+          # レートと逆指値レートが指定されていればOCO取引
+          raise "options[:expiration_type] is required." if options[:expiration_type] == nil
+        elsif ( options[:rate] != nil )
+          # レートが指定されていれば通常取引
+          raise "options[:execution_expression] is required." if options[:execution_expression] == nil
+          raise "options[:expiration_type] is required." if options[:expiration_type] == nil
+        else
+          # 成り行き
+          if ( options[:slippage] != nil )
+            raise "if you use a slippage,  options[:slippage_base_rate] is required." if options[:slippage_base_rate] == nil
+          end
+        end
+        
+        # 建玉一覧
+        result =  @client.click( @links.find {|i|
+            i.attributes["accesskey"] == "3"
+        })
+        
+        # 対象となる建玉をクリック 
+        link =  result.links.find {|l|
+            l.href =~ /[^"]*ORDERNO=([a-zA-Z0-9]*)[^"]*/ && $1 == open_interest_id
+        }
+        raise "illegal open_interest_id. open_interest_id=#{open_interest_id}" unless link
+        result =  @client.click(link)
+        
+        # 決済
+        form = result.forms.first
+        form["P100"] = "00" # 成り行き TODO 通常(01),OCO取引(21)対応
+        result = @client.submit(form)
+        
+        # 設定
+        form = result.forms.first
+        form["L111"] = unit.to_s
+        form["P005"] = options[:slippage].to_s if options[:slippage]
+        result = @client.submit(form)
+        
+        # 確認
+        form = result.forms.first
+        result = @client.submit(form)
+        puts result.body.toutf8
+        ClickClient::Client.error( result ) unless result.body.toutf8 =~ /完了/
+      end
+
+      
       #
       #=== 注文一覧を取得します。
       #
