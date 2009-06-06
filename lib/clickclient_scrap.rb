@@ -32,7 +32,7 @@ require 'set'
 #- 本ライブラリの利用は自己責任でお願いします。
 #- ライブラリの不備・不具合等によるあらゆる損害について、作成者は責任を負いません。
 #
-module ClickClient
+module ClickClientScrap
 
   # クライアント
   class Client
@@ -45,7 +45,7 @@ module ClickClient
     #*proxy*:: プロキシホストを利用する場合、そのホスト名とパスを指定します。
     # 例) https://proxyhost.com:80
     #
-    def initialize( proxy=nil  )
+    def initialize( proxy=nil )
       @client = WWW::Mechanize.new {|c|
         # プロキシ
         if proxy 
@@ -53,25 +53,29 @@ module ClickClient
           c.set_proxy( uri.host, uri.port )
         end
       }
+      @client.keep_alive = false
       @client.user_agent_alias = 'Windows IE 7'
       @host_name = DEFAULT_HOST_NAME
     end
 
     #ログインし、セッションを開始します。
     #-ブロックを指定した場合、引数としてセッションを指定してブロックを実行します。ブロック実行後、ログアウトします。
-    #-そうでない場合、セッションを返却します。この場合、ClickClient::FX::FxSession#logoutを実行しログアウトしてください。
+    #-そうでない場合、セッションを返却します。この場合、ClickClientScrap::FX::FxSession#logoutを実行しログアウトしてください。
     #
-    #戻り値:: ClickClient::FX::FxSession
-    def fx_session( userid, password, &block )
+    #userid:: ユーザーID
+    #password:: パスワード
+    #options:: オプション 
+    #戻り値:: ClickClientScrap::FX::FxSession
+    def fx_session( userid, password, options={}, &block )
       page = @client.get(@host_name)
-      ClickClient::Client.error(page)  if page.forms.length <= 0
+      ClickClientScrap::Client.error(page)  if page.forms.length <= 0
       form = page.forms.first
       form.j_username = userid
       form.j_password = password
       result = @client.submit(form, form.buttons.first) 
       if result.body.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
          result = @client.get($1)
-         session = FX::FxSession.new( @client, result.links )
+         session = FX::FxSession.new( @client, result.links, options )
          if block_given?
            begin
              yield session
@@ -82,7 +86,7 @@ module ClickClient
            return session
          end
       else
-        ClickClient::Client.error( result )
+        ClickClientScrap::Client.error( result )
       end
     end
     def self.error( page )
@@ -178,19 +182,24 @@ module ClickClient
     #Client#fx_sessionのブロックの引数として渡されます。詳細はClient#fx_sessionを参照ください。
     class FxSession
       
-      def initialize( client, links )
+      def initialize( client, links, options={} )
         @client = client
         @links = links
+        @options = options
       end
       
       #レート一覧を取得します。
       #
-      #戻り値:: 通貨ペアをキーとするClickClient::FX::Rateのハッシュ。
+      #戻り値:: 通貨ペアをキーとするClickClientScrap::FX::Rateのハッシュ。
       def list_rates
         result =  @client.click( @links.find {|i|
             i.attributes["accesskey"] == "1"
         })
-        @swaps = list_swaps unless @swaps
+         if !@last_update_time_of_swaps \
+           || Time.now.to_i - @last_update_time_of_swaps  > (@options[:swap_update_interval] || 60*60)
+          @swaps  = list_swaps
+          @last_update_time_of_swaps = Time.now.to_i
+        end
         reg = />([A-Z]+\/[A-Z]+)<\/a>[^\-\.\d]*?([\d]+\.[\d]+\-[\d]+)/
         return  result.body.toutf8.scan( reg ).inject({}) {|r,l|
              pair = to_pair( l[0] )
@@ -220,7 +229,7 @@ module ClickClient
     
       #スワップの一覧を取得します。
       #
-      #戻り値:: 通貨ペアをキーとするClickClient::FX::Swapのハッシュ。
+      #戻り値:: 通貨ペアをキーとするClickClientScrap::FX::Swapのハッシュ。
       def list_swaps
         result =  @client.click( @links.find {|i|
             i.attributes["accesskey"] == "8"
@@ -236,46 +245,46 @@ module ClickClient
       #注文を行います。
       #
       #currency_pair_code:: 通貨ペアコード(必須)
-      #sell_or_buy:: 売買区分。ClickClient::FX::BUY,ClickClient::FX::SELLのいずれかを指定します。(必須)
+      #sell_or_buy:: 売買区分。ClickClientScrap::FX::BUY,ClickClientScrap::FX::SELLのいずれかを指定します。(必須)
       #unit:: 取引数量(必須)
       #options:: 注文のオプション。注文方法に応じて以下の情報を設定できます。
       #            - <b>成り行き注文</b>
       #              - <tt>:slippage</tt> .. スリッページ (オプション)。何pips以内かを整数で指定します。
       #            - <b>通常注文</b> ※注文レートが設定されていれば通常取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
-      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
-      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
       #            - <b>OCO注文</b> ※逆指値レートが設定されていればOCO取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
       #              - <tt>:stop_order_rate</tt> .. 逆指値レート(必須)
-      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
       #            - <b>IFD注文</b> ※決済取引の指定があればIFD取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
-      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
-      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
       #              - <tt>:settle</tt> .. 決済取引の指定。マップで指定します。
       #                - <tt>:unit</tt> .. 決済取引の取引数量(必須)
-      #                - <tt>:sell_or_buy</tt> .. 決済取引の売買区分。ClickClient::FX::BUY,ClickClient::FX::SELLのいずれかを指定します。(必須)
+      #                - <tt>:sell_or_buy</tt> .. 決済取引の売買区分。ClickClientScrap::FX::BUY,ClickClientScrap::FX::SELLのいずれかを指定します。(必須)
       #                - <tt>:rate</tt> .. 決済取引の注文レート(必須)
-      #                - <tt>:execution_expression</tt> .. 決済取引の執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
-      #                - <tt>:expiration_type</tt> .. 決済取引の有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #                - <tt>:expiration_date</tt> .. 決済取引の有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #                - <tt>:execution_expression</tt> .. 決済取引の執行条件。ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
+      #                - <tt>:expiration_type</tt> .. 決済取引の有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #                - <tt>:expiration_date</tt> .. 決済取引の有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
       #            - <b>IFD-OCO注文</b> ※決済取引の指定と逆指値レートの指定があればIFD-OCO取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
-      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
-      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
       #              - <tt>:settle</tt> .. 決済取引の指定。マップで指定します。
       #                - <tt>:unit</tt> .. 決済取引の取引数量(必須)
-      #                - <tt>:sell_or_buy</tt> .. 決済取引の売買区分。ClickClient::FX::BUY,ClickClient::FX::SELLのいずれかを指定します。(必須)
+      #                - <tt>:sell_or_buy</tt> .. 決済取引の売買区分。ClickClientScrap::FX::BUY,ClickClientScrap::FX::SELLのいずれかを指定します。(必須)
       #                - <tt>:rate</tt> .. 決済取引の注文レート(必須)
       #                - <tt>:stop_order_rate</tt> .. 決済取引の逆指値レート(必須)
-      #                - <tt>:expiration_type</tt> .. 決済取引の有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #                - <tt>:expiration_date</tt> .. 決済取引の有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
-      #戻り値:: ClickClient::FX::OrderResult
+      #                - <tt>:expiration_type</tt> .. 決済取引の有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #                - <tt>:expiration_date</tt> .. 決済取引の有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #戻り値:: ClickClientScrap::FX::OrderResult
       #
       def order ( currency_pair_code, sell_or_buy, unit, options={} )
         
@@ -340,22 +349,22 @@ module ClickClient
           when ORDER_TYPE_MARKET_ORDER
             # 成り行き
             form["P002"] = unit.to_s # 取り引き数量
-            form["P005.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い  
+            form["P005.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い  
             form["P007"] = options[:slippage].to_s if ( options && options[:slippage] != nil ) # スリッページ
           when ORDER_TYPE_NORMAL
             # 指値
             form["P003"] = options[:rate].to_s # レート
             form["P005"] = unit.to_s # 取り引き数量
-            form["P002.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い
+            form["P002.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い
             exp =  options[:execution_expression]
-            form["P004.0"] = exp  == ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER ? "2" : "1" #指値/逆指値
+            form["P004.0"] = exp  == ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER ? "2" : "1" #指値/逆指値
             set_expiration( form,  options, "P008", "P009" ) # 有効期限
           when ORDER_TYPE_OCO
             # OCO
             form["P003"] = options[:rate].to_s # レート
             form["P005"] = options[:stop_order_rate].to_s # 逆指値レート
             form["P007"] = unit.to_s # 取り引き数量
-            form["P002.0"] = sell_or_buy == ClickClient::FX::SELL ? "1" : "0" #売り/買い
+            form["P002.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い
             set_expiration( form,  options, "P010", "P011" ) # 有効期限
           else
             raise "not supported yet."
@@ -364,7 +373,7 @@ module ClickClient
         # 確認画面へ
         result = @client.submit(form) 
         result = @client.submit(result.forms.first)
-        ClickClient::Client.error( result ) unless result.body.toutf8 =~ /注文受付完了/
+        ClickClientScrap::Client.error( result ) unless result.body.toutf8 =~ /注文受付完了/
         
         #注文前の一覧と注文後の一覧を比較して注文を割り出す。
         #成り行き注文の場合、即座に約定するのでnilになる(タイミングによっては取得できるかも)
@@ -379,11 +388,11 @@ module ClickClient
       #input_date:: 有効期限が日付指定の場合に、日付を入力するinput要素名
       def set_expiration( form,  options, input_type, input_date )
         case options[:expiration_type]
-          when ClickClient::FX::EXPIRATION_TYPE_TODAY
+          when ClickClientScrap::FX::EXPIRATION_TYPE_TODAY
               form[input_type] = "0"
-          when ClickClient::FX::EXPIRATION_TYPE_WEEK_END
+          when ClickClientScrap::FX::EXPIRATION_TYPE_WEEK_END
               form[input_type] = "1"
-          when ClickClient::FX::EXPIRATION_TYPE_SPECIFIED
+          when ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED
               form[input_type] = "3"
               raise "options[:expiration_date] is required." unless options[:expiration_date]
               form["#{input_date}.Y"] = options[:expiration_date].year
@@ -425,7 +434,7 @@ module ClickClient
         result = @client.submit(form)
         form = result.forms.first
         result = @client.submit(form)
-        ClickClient::Client.error( result ) unless result.body.toutf8 =~ /注文取消受付完了/
+        ClickClientScrap::Client.error( result ) unless result.body.toutf8 =~ /注文取消受付完了/
       end
       
       
@@ -440,14 +449,14 @@ module ClickClient
       #              - <tt>:slippage_base_rate</tt> .. スリッページの基準となる取引レート(スリッページが指定された場合、必須。)
       #            - <b>通常注文</b> ※注文レートが設定されていれば通常取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
-      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
-      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #              - <tt>:execution_expression</tt> .. 執行条件。ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
       #            - <b>OCO注文</b> ※注文レートと逆指値レートが設定されていればOCO取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
       #              - <tt>:stop_order_rate</tt> .. 逆指値レート(必須)
-      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClient::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
-      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClient::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
+      #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
+      #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
       #<b>戻り値</b>:: なし
       #
       def settle ( open_interest_id, unit, options={} )
@@ -492,7 +501,7 @@ module ClickClient
         form = result.forms.first
         result = @client.submit(form)
         puts result.body.toutf8
-        ClickClient::Client.error( result ) unless result.body.toutf8 =~ /完了/
+        ClickClientScrap::Client.error( result ) unless result.body.toutf8 =~ /完了/
       end
 
       
@@ -501,9 +510,9 @@ module ClickClient
       #
       #order_condition_code:: 注文状況コード(必須)
       #currency_pair_code:: 通貨ペアコード
-      #戻り値:: 注文番号をキーとするClickClient::FX::Orderのハッシュ。
+      #戻り値:: 注文番号をキーとするClickClientScrap::FX::Orderのハッシュ。
       #
-      def list_orders(  order_condition_code=ClickClient::FX::ORDER_CONDITION_ALL, currency_pair_code=nil )
+      def list_orders(  order_condition_code=ClickClientScrap::FX::ORDER_CONDITION_ALL, currency_pair_code=nil )
         
         result =  @client.click( @links.find {|i|
             i.attributes["accesskey"] == "2"
@@ -518,17 +527,17 @@ module ClickClient
         list.each {|i|
           order_no = i[0] 
           order_type = to_order_type_code(i[2])
-          trade_type = i[3] == "新" ? ClickClient::FX::TRADE_TYPE_NEW : ClickClient::FX::TRADE_TYPE_SETTLEMENT
+          trade_type = i[3] == "新" ? ClickClientScrap::FX::TRADE_TYPE_NEW : ClickClientScrap::FX::TRADE_TYPE_SETTLEMENT
           pair = to_pair( i[1] )
-          sell_or_buy = i[4] == "売" ?  ClickClient::FX::SELL : ClickClient::FX::BUY
+          sell_or_buy = i[4] == "売" ?  ClickClientScrap::FX::SELL : ClickClientScrap::FX::BUY
           count =  pair == :ZARJPY ?  i[5].to_i/10 : i[5].to_i
           rate =  i[6].to_f
           execution_expression = if i[7] == "指"
-            ClickClient::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
+            ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
           elsif i[7] == "逆"
-            ClickClient::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
+            ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
           else
-            ClickClient::FX::EXECUTION_EXPRESSION_MARKET_ORDER
+            ClickClientScrap::FX::EXECUTION_EXPRESSION_MARKET_ORDER
           end
           tmp[order_no] = Order.new( order_no, trade_type, order_type, execution_expression, sell_or_buy, pair, count, rate, i[8])
         }
@@ -539,7 +548,7 @@ module ClickClient
       #=== 建玉一覧を取得します。
       #
       #currency_pair_code:: 通貨ペアコード
-      #戻り値:: 建玉IDをキーとするClickClient::FX::OpenInterestのハッシュ。
+      #戻り値:: 建玉IDをキーとするClickClientScrap::FX::OpenInterestのハッシュ。
       #
       def  list_open_interests( currency_pair_code=nil ) 
         
@@ -555,7 +564,7 @@ module ClickClient
         list.each {|i|
           open_interest_id = i[1] 
           pair = to_pair( i[0] )
-          sell_or_buy = i[2] == "売" ?  ClickClient::FX::SELL : ClickClient::FX::BUY
+          sell_or_buy = i[2] == "売" ?  ClickClientScrap::FX::SELL : ClickClientScrap::FX::BUY
           count =  i[3].to_i
           rate =  i[4].to_f
           profit_or_loss =  i[5].to_i
@@ -584,20 +593,23 @@ module ClickClient
       def to_order_type_code( order_type )
         return  case order_type
           when "成行注文"
-            ClickClient::FX::ORDER_TYPE_MARKET_ORDER
+            ClickClientScrap::FX::ORDER_TYPE_MARKET_ORDER
           when "通常注文"
-            ClickClient::FX::ORDER_TYPE_NORMAL
+            ClickClientScrap::FX::ORDER_TYPE_NORMAL
           when "OCO注文"
-            ClickClient::FX::ORDER_TYPE_OCO
+            ClickClientScrap::FX::ORDER_TYPE_OCO
           when "IFD注文"
-            ClickClient::FX:: ORDER_TYPE_IFD
+            ClickClientScrap::FX::ORDER_TYPE_IFD
           when "IFD-OCO注文"
-            ClickClient::FX:: ORDER_TYPE_IFD_OCO
+            ClickClientScrap::FX::ORDER_TYPE_IFD_OCO
           else
             raise "illegal order_type. order_type=#{order_type}"
         end
       end
     end
+    
+    # オプション
+    attr :options, true
     
     #=== スワップ
     Swap = Struct.new(:pair, :sell_swap, :buy_swap)

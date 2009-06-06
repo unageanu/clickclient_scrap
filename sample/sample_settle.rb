@@ -5,7 +5,7 @@ require 'clickclient_scrap'
 require 'constants'
 
 # ログイン
-c = ClickClient::Client.new
+c = ClickClientScrap::Client.new
 c.fx_session( USER, PASS ) {|session|
   
   # 建玉一覧を取得

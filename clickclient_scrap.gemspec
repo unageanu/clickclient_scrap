@@ -1,6 +1,6 @@
 Gem::Specification.new do |spec|
   spec.name = "clickclient_scrap"
-  spec.version = "0.1.2"
+  spec.version = "0.1.3"
   spec.summary = "click securities client library for ruby."
   spec.author = "Masaya Yamauchi"
   spec.email = "y-masaya@red.hot.co.jp"
@@ -8,11 +8,17 @@ Gem::Specification.new do |spec|
   spec.files = [
     "README",
     "ChangeLog",
-    "lib/clickclient_scrap.rb"
+    "lib/clickclient_scrap.rb",
+    "lib/jiji_plugin.rb",
+    "test/test_FxSession.rb",
+    "test/test_jiji_plugin.rb"
   ]
   spec.test_files = [
+     "test/test_FxSession.rb",
+     "test/test_jiji_plugin.rb"
   ]
   spec.has_rdoc = true
   spec.rdoc_options << "--main" << "README"
+  spec.add_dependency('mechanize', '= 0.9.0')
   spec.extra_rdoc_files = ["README"]
 end
