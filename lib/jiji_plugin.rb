@@ -89,32 +89,38 @@ class ClickSecuritiesPluginSession
     @props = props
     @logger = logger
     @m = Mutex.new
-    @client = ClickClientScrap::Client.new( 
-      @props.key?(:proxy) ? @props[:proxy] : nil )
   end
   def method_missing( name, *args )
-    begin
-      session.send( name, *args )
-    rescue
-      # エラーになった場合はセッションを再作成する
-      close
-      raise $!
-    end
-  end
-  def close
-    @session.logout if @session
-    @session = nil
-  end
-  def session
     @m.synchronize { 
       begin
-        @session ||= @client.fx_session( @props[:user], @props[:password] )
+        session.send( name, *args )
       rescue
-        @logger.error $!
+        # エラーになった場合はセッションを再作成する
+        close
         raise $!
       end
-      @session
     }
+  end
+  def close
+    begin
+      @session.logout if @session
+    rescue
+      @logger.error $!
+    ensure
+      @session = nil
+      @client = nil
+    end
+  end
+  def session
+    begin
+      @client ||= ClickClientScrap::Client.new( 
+         @props.key?(:proxy) ? @props[:proxy] : nil )
+      @session ||= @client.fx_session( @props[:user], @props[:password] )
+    rescue
+      @logger.error $!
+      raise $!
+    end
+    @session
   end
 end
 

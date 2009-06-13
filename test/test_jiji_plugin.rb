@@ -10,6 +10,7 @@ require 'jiji/plugin/plugin_loader'
 require 'jiji/plugin/securities_plugin'
 
 # jijiプラグインのテスト
+# ※実際に取引を行うので注意!
 class JIJIPluginTest <  RUNIT::TestCase
 
   def setup
@@ -45,29 +46,29 @@ class JIJIPluginTest <  RUNIT::TestCase
       sleep 1
       
       3.times {
-      rates =  plugin.list_rates
-      pairs.each {|p|
-        # 利用可能とされたペアのレートが取得できていることを確認
-        assert_not_nil p.name
-        assert_not_nil p.trade_unit
-        assert_not_nil rates[p.name]
-        assert_not_nil rates[p.name].bid
-        assert_not_nil rates[p.name].ask
-        assert_not_nil rates[p.name].sell_swap
-        assert_not_nil rates[p.name].buy_swap
-      }
-      sleep 10
+        rates =  plugin.list_rates
+        pairs.each {|p|
+          # 利用可能とされたペアのレートが取得できていることを確認
+          assert_not_nil p.name
+          assert_not_nil p.trade_unit
+          assert_not_nil rates[p.name]
+          assert_not_nil rates[p.name].bid
+          assert_not_nil rates[p.name].ask
+          assert_not_nil rates[p.name].sell_swap
+          assert_not_nil rates[p.name].buy_swap
+        }
+        sleep 10
       }
       
       # 売り/買い
-      sell = plugin.order( :EURJPY, :sell, 1 )      
-      buy  = plugin.order( :EURJPY, :buy, 1 ) 
-      assert_not_nil sell.position_id
-      assert_not_nil buy.position_id
-      
-      # 約定
-      plugin.commit sell.position_id, 1 
-      plugin.commit buy.position_id, 1
+#      sell = plugin.order( :EURJPY, :sell, 1 )      
+#      buy  = plugin.order( :EURJPY, :buy, 1 ) 
+#      assert_not_nil sell.position_id
+#      assert_not_nil buy.position_id
+#      
+#      # 約定
+#      plugin.commit sell.position_id, 1 
+#      plugin.commit buy.position_id, 1
     ensure
       plugin.destroy_plugin
     end

@@ -18,10 +18,10 @@ require 'set'
 #
 #====基本的な使い方
 #
-# require 'clickclient'
+# require 'clickclient_scrap'
 # 
 # c = ClickClient::Client.new 
-# # c = ClickClient::Client.new https://<プロキシホスト>:<プロキシポート> # プロキシを利用する場合
+# # c = ClickClientScrap::Client.new https://<プロキシホスト>:<プロキシポート> # プロキシを利用する場合
 # c.fx_session( "<ユーザー名>", "<パスワード>" ) { | fx_session |
 #   # 通貨ペア一覧取得
 #   list = fx_session.list_rates
@@ -75,6 +75,7 @@ module ClickClientScrap
       result = @client.submit(form, form.buttons.first) 
       if result.body.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
          result = @client.get($1)
+         ClickClientScrap::Client.error( result ) if result.links.size <= 0
          session = FX::FxSession.new( @client, result.links, options )
          if block_given?
            begin
@@ -192,16 +193,16 @@ module ClickClientScrap
       #
       #戻り値:: 通貨ペアをキーとするClickClientScrap::FX::Rateのハッシュ。
       def list_rates
-        result =  @client.click( @links.find {|i|
-            i.attributes["accesskey"] == "1"
-        })
+        result =  link_click( "1" )
          if !@last_update_time_of_swaps \
            || Time.now.to_i - @last_update_time_of_swaps  > (@options[:swap_update_interval] || 60*60)
           @swaps  = list_swaps
           @last_update_time_of_swaps = Time.now.to_i
         end
         reg = />([A-Z]+\/[A-Z]+)<\/a>[^\-\.\d]*?([\d]+\.[\d]+\-[\d]+)/
-        return  result.body.toutf8.scan( reg ).inject({}) {|r,l|
+        tokens = result.body.toutf8.scan( reg )
+        ClickClientScrap::Client.error( result ) if !tokens || tokens.empty?
+        return  tokens.inject({}) {|r,l|
              pair = to_pair( l[0] )
              swap = @swaps[pair]
              rate = FxSession.convert_rate l[1]
@@ -231,9 +232,7 @@ module ClickClientScrap
       #
       #戻り値:: 通貨ペアをキーとするClickClientScrap::FX::Swapのハッシュ。
       def list_swaps
-        result =  @client.click( @links.find {|i|
-            i.attributes["accesskey"] == "8"
-        })
+        result =  link_click( "8" )
         reg = /<dd>([A-Z]+\/[A-Z]+) <font[^>]*>売<\/font>[^\-\d]*?([\-\d]+)[^\-\d]*<font[^>]*>買<\/font>[^\-\d]*([\-\d]+)[^\-\d]*<\/dd>/
         return  result.body.toutf8.scan( reg ).inject({}) {|r,l|
              pair = to_pair( l[0] )
@@ -327,9 +326,9 @@ module ClickClientScrap
         before = list_orders( ORDER_CONDITION_ON_ORDER ).inject(Set.new) {|s,o| s << o[0]; s }
         
         # レート一覧
-        result =  @client.click( @links.find {|i|
-            i.attributes["accesskey"] == "1"
-        })
+        result =  link_click( "1" )
+
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         form = result.forms.first
         
         # 通貨ペア
@@ -344,6 +343,7 @@ module ClickClientScrap
         
         # 詳細設定画面へ
         result = @client.submit(form) 
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         form = result.forms.first
         case type
           when ORDER_TYPE_MARKET_ORDER
@@ -372,6 +372,7 @@ module ClickClientScrap
         
         # 確認画面へ
         result = @client.submit(form) 
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         result = @client.submit(result.forms.first)
         ClickClientScrap::Client.error( result ) unless result.body.toutf8 =~ /注文受付完了/
         
@@ -415,9 +416,8 @@ module ClickClientScrap
         raise "order_no is nil." unless order_no
         
         # 注文一覧
-        result =  @client.click( @links.find {|i|
-            i.attributes["accesskey"] == "2"
-        })
+        result =  link_click( "2" )
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         form = result.forms.first
         form["P002"] = ORDER_CONDITION_ON_ORDER
         result = @client.submit(form)
@@ -428,10 +428,12 @@ module ClickClientScrap
         }
         raise "illegal order_no. order_no=#{order_no}" unless link
         result =  @client.click(link)
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         
         # キャンセル
         form = result.forms[1]
         result = @client.submit(form)
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         form = result.forms.first
         result = @client.submit(form)
         ClickClientScrap::Client.error( result ) unless result.body.toutf8 =~ /注文取消受付完了/
@@ -475,9 +477,7 @@ module ClickClientScrap
         end
         
         # 建玉一覧
-        result =  @client.click( @links.find {|i|
-            i.attributes["accesskey"] == "3"
-        })
+        result =  link_click( "3" )
         
         # 対象となる建玉をクリック 
         link =  result.links.find {|l|
@@ -490,17 +490,18 @@ module ClickClientScrap
         form = result.forms.first
         form["P100"] = "00" # 成り行き TODO 通常(01),OCO取引(21)対応
         result = @client.submit(form)
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         
         # 設定
         form = result.forms.first
         form["L111"] = unit.to_s
         form["P005"] = options[:slippage].to_s if options[:slippage]
         result = @client.submit(form)
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         
         # 確認
         form = result.forms.first
         result = @client.submit(form)
-        puts result.body.toutf8
         ClickClientScrap::Client.error( result ) unless result.body.toutf8 =~ /完了/
       end
 
@@ -513,10 +514,8 @@ module ClickClientScrap
       #戻り値:: 注文番号をキーとするClickClientScrap::FX::Orderのハッシュ。
       #
       def list_orders(  order_condition_code=ClickClientScrap::FX::ORDER_CONDITION_ALL, currency_pair_code=nil )
-        
-        result =  @client.click( @links.find {|i|
-            i.attributes["accesskey"] == "2"
-        })
+        result =  link_click( "2" )
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         form = result.forms.first
         form["P001"] = "" # TODO currency_pair_codeでの絞り込み
         form["P002"] = order_condition_code
@@ -551,10 +550,8 @@ module ClickClientScrap
       #戻り値:: 建玉IDをキーとするClickClientScrap::FX::OpenInterestのハッシュ。
       #
       def  list_open_interests( currency_pair_code=nil ) 
-        
-        result =  @client.click( @links.find {|i|
-            i.attributes["accesskey"] == "3"
-        })
+        result =  link_click( "3" )
+        ClickClientScrap::Client.error( result ) if result.forms.empty?
         form = result.forms.first
         form["P001"] = "" # TODO currency_pair_codeでの絞り込み
         result = @client.submit(form) 
@@ -575,12 +572,9 @@ module ClickClientScrap
       
       # ログアウトします。
       def logout
-        begin
-          @client.click( @links.find {|i|
-              i.text == "\303\233\302\270\303\236\302\261\302\263\303\204"
-          })
-        rescue
-        end 
+        @client.click( @links.find {|i|
+            i.text == "\303\233\302\270\303\236\302\261\302\263\303\204"
+        })
       end
       
     private
@@ -605,6 +599,14 @@ module ClickClientScrap
           else
             raise "illegal order_type. order_type=#{order_type}"
         end
+      end
+      
+      def link_click( no )
+        link = @links.find {|i|
+            i.attributes["accesskey"] == no
+        }
+        raise "link isnot found. accesskey=#{no}"  unless link
+        @client.click( link )
       end
     end
     
