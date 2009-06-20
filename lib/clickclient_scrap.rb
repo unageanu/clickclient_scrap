@@ -54,6 +54,7 @@ module ClickClientScrap
         end
       }
       @client.keep_alive = false
+      @client.max_history=0
       @client.user_agent_alias = 'Windows IE 7'
       @host_name = DEFAULT_HOST_NAME
     end
