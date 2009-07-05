@@ -20,7 +20,7 @@ class ClickSecuritiesPlugin
   def input_infos
     [ Input.new( :user, "Please input a user name of CLICK Securities.", false, nil ),
       Input.new( :password, "Please input a password of CLICK Securities.", true, nil ),
-      Input.new( :proxy, "Please input a proxy. example: https://example.com:80 (default: nil )", false, nil ) ]
+      Input.new( :proxy, "Please input a proxy. example: http://example.com:80 (default: nil )", false, nil ) ]
   end
   
   #プラグインを初期化します。
@@ -113,8 +113,11 @@ class ClickSecuritiesPluginSession
   end
   def session
     begin
-      @client ||= ClickClientScrap::Client.new( 
-         @props.key?(:proxy) ? @props[:proxy] : nil )
+      proxy = nil
+      if @props.key?(:proxy) && @props[:proxy] != nil && @props[:proxy].length > 0
+        proxy = @props[:proxy]
+      end
+      @client ||= ClickClientScrap::Client.new( proxy )
       @session ||= @client.fx_session( @props[:user], @props[:password] )
     rescue
       @logger.error $!
