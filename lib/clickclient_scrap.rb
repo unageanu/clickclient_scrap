@@ -450,12 +450,12 @@ module ClickClientScrap
       #            - <b>成り行き注文</b>
       #              - <tt>:slippage</tt> .. スリッページ (オプション)
       #              - <tt>:slippage_base_rate</tt> .. スリッページの基準となる取引レート(スリッページが指定された場合、必須。)
-      #            - <b>通常注文</b> ※注文レートが設定されていれば通常取引となります。
+      #            - <b>通常注文</b>  <b>※未実装</b> ※注文レートが設定されていれば通常取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
       #              - <tt>:execution_expression</tt> .. 執行条件。ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER等を指定します(必須)
       #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
       #              - <tt>:expiration_date</tt> .. 有効期限が「日付指定(ClickClientScrap::FX::EXPIRATION_TYPE_SPECIFIED)」の場合の有効期限をDateで指定します。(有効期限が「日付指定」の場合、必須)
-      #            - <b>OCO注文</b> ※注文レートと逆指値レートが設定されていればOCO取引となります。
+      #            - <b>OCO注文</b>  <b>※未実装</b> ※注文レートと逆指値レートが設定されていればOCO取引となります。
       #              - <tt>:rate</tt> .. 注文レート(必須)
       #              - <tt>:stop_order_rate</tt> .. 逆指値レート(必須)
       #              - <tt>:expiration_type</tt> .. 有効期限。ClickClientScrap::FX::EXPIRATION_TYPE_TODAY等を指定します(必須)
@@ -511,7 +511,7 @@ module ClickClientScrap
       #=== 注文一覧を取得します。
       #
       #order_condition_code:: 注文状況コード(必須)
-      #currency_pair_code:: 通貨ペアコード
+      #currency_pair_code:: 通貨ペアコード <b>※未実装</b>
       #戻り値:: 注文番号をキーとするClickClientScrap::FX::Orderのハッシュ。
       #
       def list_orders(  order_condition_code=ClickClientScrap::FX::ORDER_CONDITION_ALL, currency_pair_code=nil )
@@ -547,7 +547,7 @@ module ClickClientScrap
       #
       #=== 建玉一覧を取得します。
       #
-      #currency_pair_code:: 通貨ペアコード
+      #currency_pair_code:: 通貨ペアコード。<b>※未実装</b>
       #戻り値:: 建玉IDをキーとするClickClientScrap::FX::OpenInterestのハッシュ。
       #
       def  list_open_interests( currency_pair_code=nil ) 
@@ -569,6 +569,35 @@ module ClickClientScrap
           tmp[open_interest_id] = OpenInterest.new(open_interest_id, pair, sell_or_buy, count, rate, profit_or_loss  )
         }
         return tmp
+      end
+      
+      #
+      #=== 余力情報を取得します。
+      #
+      #戻り値:: ClickClientScrap::FX::Marginのハッシュ。
+      #
+      def get_margin
+        result =  link_click( "7" )
+        list = result.body.toutf8.scan( /【([^<]*)[^>]*>[^>]*>([^<]*)</m )
+        values = list.inject({}) {|r,i|
+          if ( i[0] == "証拠金維持率】" )
+            r[i[0]] = i[1]
+          else
+            r[i[0]] = i[1].gsub(/,/, "").to_i
+          end
+          r
+        }
+        return Margin.new(
+          values["時価評価総額】"],
+          values["建玉評価損益】"],
+          values["口座残高】"],
+          values["証拠金維持率】"],
+          values["余力】"],
+          values["拘束証拠金】"],
+          values["必要証拠金】"],
+          values["注文中必要証拠金】"],
+          values["振替可能額】"]
+        )
       end
       
       # ログアウトします。
@@ -624,6 +653,18 @@ module ClickClientScrap
     OrderResult = Struct.new(:order_no )
     #===建玉
     OpenInterest = Struct.new(:open_interest_id, :pair, :sell_or_buy, :count, :rate, :profit_or_loss  )
+    #===余力
+    Margin = Struct.new( 
+      :market_value, #時価評価の総額
+      :appraisal_profit_or_loss_of_open_interest, #建玉の評価損益
+      :balance_in_account, # 口座残高
+      :guarantee_money_maintenance_ratio, #証拠金の維持率
+      :margin, #余力
+      :freezed_guarantee_money, #拘束されている証拠金
+      :required_guarantee_money, #必要な証拠金
+      :ordered_guarantee_money, #注文中の証拠金
+      :transferable_money_amount #振替可能額 
+    )
   end
 end
 
