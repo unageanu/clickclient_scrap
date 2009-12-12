@@ -60,9 +60,9 @@ class JIJIPluginTest <  RUNIT::TestCase
         sleep 10
       }
       
-      # 売り/買い
-#      sell = plugin.order( :EURJPY, :sell, 1 )      
-#      buy  = plugin.order( :EURJPY, :buy, 1 ) 
+#      # 売り/買い
+#      sell = plugin.order( :USDJPY, :sell, 1 )      
+#      buy  = plugin.order( :USDJPY, :buy, 1 ) 
 #      assert_not_nil sell.position_id
 #      assert_not_nil buy.position_id
 #      
