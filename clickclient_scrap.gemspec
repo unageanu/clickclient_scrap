@@ -1,6 +1,6 @@
 Gem::Specification.new do |spec|
   spec.name = "clickclient_scrap"
-  spec.version = "0.1.7"
+  spec.version = "0.1.8"
   spec.summary = "click securities client library for ruby."
   spec.author = "Masaya Yamauchi"
   spec.email = "y-masaya@red.hot.co.jp"

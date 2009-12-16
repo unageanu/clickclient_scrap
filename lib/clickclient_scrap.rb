@@ -349,9 +349,9 @@ module ClickClientScrap
         case type
           when ORDER_TYPE_MARKET_ORDER
             # 成り行き
-            form["P002"] = unit.to_s # 取り引き数量
-            form["P005.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い  
-            form["P007"] = options[:slippage].to_s if ( options && options[:slippage] != nil ) # スリッページ
+            form["P003"] = unit.to_s # 取り引き数量
+            form["P002.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い  
+            form["P005"] = options[:slippage].to_s if ( options && options[:slippage] != nil ) # スリッページ
           when ORDER_TYPE_NORMAL
             # 指値
             form["P003"] = options[:rate].to_s # レート
@@ -603,7 +603,8 @@ module ClickClientScrap
       # ログアウトします。
       def logout
         @client.click( @links.find {|i|
-            i.text == "\303\233\302\270\303\236\302\261\302\263\303\204"
+            i.text == "\303\233\302\270\303\236\302\261\302\263\303\204" \
+            || i.text == "ﾛｸﾞｱｳﾄ"
         })
       end
       
