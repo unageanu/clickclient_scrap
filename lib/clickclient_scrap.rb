@@ -38,14 +38,15 @@ module ClickClientScrap
   class Client
     # ホスト名
     DEFAULT_HOST_NAME = "https://sec-sso.click-sec.com/mf/"
-
+    DEFAULT_DEMO_HOST_NAME = "https://www.click-sec.com/m/demo/"
+    
     #
     #===コンストラクタ
     #
     #*proxy*:: プロキシホストを利用する場合、そのホスト名とパスを指定します。
     # 例) https://proxyhost.com:80
     #
-    def initialize( proxy=nil )
+    def initialize( proxy=ENV["http_proxy"], demo=false )
       @client = WWW::Mechanize.new {|c|
         # プロキシ
         if proxy 
@@ -56,7 +57,8 @@ module ClickClientScrap
       @client.keep_alive = false
       @client.max_history=0
       @client.user_agent_alias = 'Windows IE 7'
-      @host_name = DEFAULT_HOST_NAME
+      @demo = demo
+      @host_name = @demo ?  DEFAULT_DEMO_HOST_NAME : DEFAULT_HOST_NAME
     end
 
     #ログインし、セッションを開始します。
@@ -74,21 +76,24 @@ module ClickClientScrap
       form.j_username = userid
       form.j_password = password
       result = @client.submit(form, form.buttons.first) 
-      if result.body.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
-         result = @client.get($1)
-         ClickClientScrap::Client.error( result ) if result.links.size <= 0
-         session = FX::FxSession.new( @client, result.links, options )
-         if block_given?
-           begin
-             yield session
-           ensure
-             session.logout
-           end
-         else
-           return session
-         end
+      # デモサイトではjsによるリダイレクトは不要。
+      if !@demo
+        if result.body.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
+           result = @client.get($1)
+           ClickClientScrap::Client.error( result ) if result.links.size <= 0
+        else
+           ClickClientScrap::Client.error( result )
+        end
+      end
+      session = FX::FxSession.new( @client, result.links, options )
+      if block_given?
+        begin
+          yield session
+        ensure
+          session.logout
+        end
       else
-        ClickClientScrap::Client.error( result )
+        return session
       end
     end
     def self.error( page )
@@ -669,5 +674,15 @@ module ClickClientScrap
   end
 end
 
+class << WWW::Mechanize::Util
+  def from_native_charset(s, code)
+    if WWW::Mechanize.html_parser == Nokogiri::HTML
+      return unless s
+      Iconv.iconv(code, "UTF-8", s).join("") rescue s # エラーになった場合、変換前の文字列を返す
+    else
+      return s       
+    end
+  end
+end
 
 
