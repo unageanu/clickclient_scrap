@@ -15,8 +15,8 @@ class JIJIPluginTest <  RUNIT::TestCase
 
   def setup
     @logger = Logger.new STDOUT
-    @user = IO.read( "../sample/user" )
-    @pass = IO.read( "../sample/pass" )
+    @user = IO.read( "../etc/user" )
+    @pass = IO.read( "../etc/pass" )
   end
  
   def test_basic
