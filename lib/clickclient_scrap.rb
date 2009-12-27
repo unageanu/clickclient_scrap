@@ -205,13 +205,13 @@ module ClickClientScrap
           @swaps  = list_swaps
           @last_update_time_of_swaps = Time.now.to_i
         end
-        reg = />([A-Z]+\/[A-Z]+)<\/a>[^\-\.\d]*?([\d]+\.[\d]+\-[\d]+)/
+        reg = />([A-Z]+\/[A-Z]+)<\/a>[^\-\.\d]*?([\d]+\.[\d]+)\-[^\-\.\d]*([\d\.]+)/
         tokens = result.body.toutf8.scan( reg )
         ClickClientScrap::Client.error( result ) if !tokens || tokens.empty?
         return  tokens.inject({}) {|r,l|
              pair = to_pair( l[0] )
              swap = @swaps[pair]
-             rate = FxSession.convert_rate l[1]
+             rate = FxSession.convert_rate "#{l[1]}-#{l[2]}"
              if ( rate && swap )
                r[pair]  = Rate.new( pair, rate[0], rate[1], swap.sell_swap, swap.buy_swap ) 
              end
@@ -220,7 +220,7 @@ module ClickClientScrap
       end
       #12.34-35 形式の文字列をbidレート、askレートに変換する。
       def self.convert_rate( str ) #:nodoc:
-        if str =~ /([\d]+)\.([\d]+)\-([\d]+)/
+        if str =~ /^([\d]+)\.([\d]+)\-([\d]+)$/
              high = $1
              low = $2
              low2 = $3
@@ -231,6 +231,8 @@ module ClickClientScrap
              end
              ask = high.to_f+(ask_low/10**low.length)
              return [bid,ask]
+        elsif str =~ /^([\d]+\.[\d]+)\-([\d]+\.[\d]+)$/
+             return [$1.to_f,$2.to_f]
         end
       end
     
@@ -239,10 +241,10 @@ module ClickClientScrap
       #戻り値:: 通貨ペアをキーとするClickClientScrap::FX::Swapのハッシュ。
       def list_swaps
         result =  link_click( "8" )
-        reg = /<dd>([A-Z]+\/[A-Z]+) <font[^>]*>売<\/font>[^\-\d]*?([\-\d]+)[^\-\d]*<font[^>]*>買<\/font>[^\-\d]*([\-\d]+)[^\-\d]*<\/dd>/
+        reg = /<dd>([A-Z]+\/[A-Z]+) <font[^>]*>売<\/font>[^\-\d]*?([\-\d,]+)[^\-\d]*<font[^>]*>買<\/font>[^\-\d]*([\-\d,]+)[^\-\d]*<\/dd>/
         return  result.body.toutf8.scan( reg ).inject({}) {|r,l|
              pair = to_pair( l[0] )
-             r[pair]  = Swap.new( pair, l[1].to_i, l[2].to_i ); r
+             r[pair]  = Swap.new( pair, l[1].sub(/,/,"").to_i, l[2].sub(/,/,"").to_i ); r
         }
       end
       
