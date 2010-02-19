@@ -565,6 +565,18 @@ module ClickClientScrap
         result = @client.submit(form) 
         
         list = result.body.toutf8.scan( /<a href="[^"]*">([A-Z]{3}\/[A-Z]{3}):([^<]*)<\/a><br>[^;]*;<font[^>]*>([^<]*)<\/font>([\d\.]*)[^\s@]*@([\d\.]*).*?<font[^>]*>([^<]*)<\/font>/m )
+
+        if /ページ選択/ =~ result.body.toutf8 # 複数ページに分割される場合
+          current_page = 1
+          link_to_next_arr = result.links.select{|i| i.text == (current_page + 1).to_s}
+          while !link_to_next_arr.empty?
+            result = @client.click( link_to_next_arr[0] )
+            list = list + result.body.toutf8.scan( /<a href="[^"]*">([A-Z]{3}\/[A-Z]{3}):([^<]*)<\/a><br>[^;]*;<font[^>]*>([^<]*)<\/font>([\d\.]*)[^\s@]*@([\d\.]*).*?<font[^>]*>([^<]*)<\/font>/m )
+            current_page = current_page + 1
+            link_to_next_arr = result.links.select{|i| i.text == (current_page + 1).to_s}
+          end
+        end
+
         tmp = {}
         list.each {|i|
           open_interest_id = i[1] 
