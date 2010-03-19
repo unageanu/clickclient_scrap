@@ -8,24 +8,29 @@ require 'thread'
 class ClickSecuritiesPlugin
   include JIJI::Plugin::SecuritiesPlugin
   
+  def initialize( demo=false )
+    @demo = demo
+  end
+  
   #プラグインの識別子を返します。
   def plugin_id
-    :click_securities
+    @demo ? :click_securities_demo : :click_securities
   end
+  
   #プラグインの表示名を返します。
   def display_name
-    "CLICK Securities"
+    @demo ? "CLICK Securities DEMO" : "CLICK Securities"
   end
   #「jiji setting」でユーザーに入力を要求するデータの情報を返します。
   def input_infos
-    [ Input.new( :user, "Please input a user name of CLICK Securities.", false, nil ),
-      Input.new( :password, "Please input a password of CLICK Securities.", true, nil ),
+    [ Input.new( :user, "Please input a user name of CLICK Securities#{ @demo ? " DEMO" : "" }.", false, nil ),
+      Input.new( :password, "Please input a password of CLICK Securities#{ @demo ? " DEMO" : "" }.", true, nil ),
       Input.new( :proxy, "Please input a proxy. example: http://example.com:80 (default: nil )", false, nil ) ]
   end
   
   #プラグインを初期化します。
   def init_plugin( props, logger ) 
-    @session = ClickSecuritiesPluginSession.new( props, logger )
+    @session = ClickSecuritiesPluginSession.new( props, logger, @demo )
   end
   #プラグインを破棄します。
   def destroy_plugin
@@ -85,10 +90,11 @@ private
 end
 
 class ClickSecuritiesPluginSession
-  def initialize( props, logger ) 
+  def initialize( props, logger, demo=false ) 
     @props = props
     @logger = logger
     @m = Mutex.new
+    @demo = demo
   end
   def method_missing( name, *args )
     @m.synchronize { 
@@ -117,7 +123,7 @@ class ClickSecuritiesPluginSession
       if @props.key?(:proxy) && @props[:proxy] != nil && @props[:proxy].length > 0
         proxy = @props[:proxy]
       end
-      @client ||= ClickClientScrap::Client.new( proxy )
+      @client ||= ClickClientScrap::Client.new( proxy, @demo )
       @session ||= @client.fx_session( @props[:user], @props[:password] )
     rescue
       @logger.error $!
@@ -130,4 +136,7 @@ end
 JIJI::Plugin.register( 
   JIJI::Plugin::SecuritiesPlugin::FUTURE_NAME, 
   ClickSecuritiesPlugin.new )
-
+  
+JIJI::Plugin.register( 
+  JIJI::Plugin::SecuritiesPlugin::FUTURE_NAME, 
+  ClickSecuritiesPlugin.new( true ) )

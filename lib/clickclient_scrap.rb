@@ -430,9 +430,13 @@ module ClickClientScrap
         form["P002"] = ORDER_CONDITION_ON_ORDER
         result = @client.submit(form)
         
-        # 対象となる注文をクリック 
-        link =  result.links.find {|l|
-            l.href =~ /[^"]*GKEY=([a-zA-Z0-9]*)[^"]*/ && $1 == order_no
+        # 対象となる注文をクリック
+        link = nil  
+        each_page( result ) {|page|
+          link =  page.links.find {|l|
+              l.href =~ /[^"]*GKEY=([a-zA-Z0-9]*)[^"]*/ && $1 == order_no
+          }
+          break if link
         }
         raise "illegal order_no. order_no=#{order_no}" unless link
         result =  @client.click(link)
@@ -488,8 +492,12 @@ module ClickClientScrap
         result =  link_click( "3" )
         
         # 対象となる建玉をクリック 
-        link =  result.links.find {|l|
-            l.href =~ /[^"]*ORDERNO=([a-zA-Z0-9]*)[^"]*/ && $1 == open_interest_id
+        link =  nil
+        each_page( result ) {|page|
+          link =  page.links.find {|l|
+              l.href =~ /[^"]*ORDERNO=([a-zA-Z0-9]*)[^"]*/ && $1 == open_interest_id
+          }
+          break if link
         }
         raise "illegal open_interest_id. open_interest_id=#{open_interest_id}" unless link
         result =  @client.click(link)
@@ -502,7 +510,7 @@ module ClickClientScrap
         
         # 設定
         form = result.forms.first
-        form["L111"] = unit.to_s
+        form["P003"] = unit.to_s
         form["P005"] = options[:slippage].to_s if options[:slippage]
         result = @client.submit(form)
         ClickClientScrap::Client.error( result ) if result.forms.empty?
@@ -529,24 +537,26 @@ module ClickClientScrap
         form["P002"] = order_condition_code
         result = @client.submit(form) 
         
-        list = result.body.toutf8.scan( /<a href="[^"]*GKEY=([a-zA-Z0-9]*)">([A-Z]{3}\/[A-Z]{3}) ([^<]*)<\/a><br>[^;]*;([^<]*)<font[^>]*>([^<]*)<\/font>([^@]*)@([\d\.]*)([^\s]*) ([^<]*)<br>/m )
+        list = []
+        each_page( result ) {|page|
+          list += page.body.toutf8.scan( /<a href="[^"]*GKEY=([a-zA-Z0-9]*)">([A-Z]{3}\/[A-Z]{3}) ([^<]*)<\/a><br>[^;]*;([^<]*)<font[^>]*>([^<]*)<\/font>([^@]*)@([\d\.]*)([^\s]*) ([^<]*)<br>([^;]*;([^<]*)<font[^>]*>([^<]*)<\/font>([^@]*)@([\d\.]*)([^\s]*) ([^<]*)<br>)?/m )
+        }
         tmp = {}
         list.each {|i|
           order_no = i[0] 
           order_type = to_order_type_code(i[2])
-          trade_type = i[3] == "新" ? ClickClientScrap::FX::TRADE_TYPE_NEW : ClickClientScrap::FX::TRADE_TYPE_SETTLEMENT
+          trade_type = i[3] == "新" ? ClickClientScrap::FX::TRADE_TYPE_NEW \
+                                                 : ClickClientScrap::FX::TRADE_TYPE_SETTLEMENT
           pair = to_pair( i[1] )
           sell_or_buy = i[4] == "売" ?  ClickClientScrap::FX::SELL : ClickClientScrap::FX::BUY
           count =  pair == :ZARJPY ?  i[5].to_i/10 : i[5].to_i
           rate =  i[6].to_f
-          execution_expression = if i[7] == "指"
-            ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
-          elsif i[7] == "逆"
-            ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
-          else
-            ClickClientScrap::FX::EXECUTION_EXPRESSION_MARKET_ORDER
-          end
-          tmp[order_no] = Order.new( order_no, trade_type, order_type, execution_expression, sell_or_buy, pair, count, rate, i[8])
+          execution_expression = to_execution_expression(i[7])
+          stop_order_rate =  i[13] ?  i[13].to_f : nil
+          stop_order_execution_expression = i[14] ? to_execution_expression(i[14]) : nil
+         
+          tmp[order_no] = Order.new( order_no, trade_type, order_type, execution_expression, \
+            sell_or_buy, pair, count, rate, i[8], stop_order_rate, stop_order_execution_expression)
         }
         return tmp
       end
@@ -564,19 +574,10 @@ module ClickClientScrap
         form["P001"] = "" # TODO currency_pair_codeでの絞り込み
         result = @client.submit(form) 
         
-        list = result.body.toutf8.scan( /<a href="[^"]*">([A-Z]{3}\/[A-Z]{3}):([^<]*)<\/a><br>[^;]*;<font[^>]*>([^<]*)<\/font>([\d\.]*)[^\s@]*@([\d\.]*).*?<font[^>]*>([^<]*)<\/font>/m )
-
-        if /ページ選択/ =~ result.body.toutf8 # 複数ページに分割される場合
-          current_page = 1
-          link_to_next_arr = result.links.select{|i| i.text == (current_page + 1).to_s}
-          while !link_to_next_arr.empty?
-            result = @client.click( link_to_next_arr[0] )
-            list = list + result.body.toutf8.scan( /<a href="[^"]*">([A-Z]{3}\/[A-Z]{3}):([^<]*)<\/a><br>[^;]*;<font[^>]*>([^<]*)<\/font>([\d\.]*)[^\s@]*@([\d\.]*).*?<font[^>]*>([^<]*)<\/font>/m )
-            current_page = current_page + 1
-            link_to_next_arr = result.links.select{|i| i.text == (current_page + 1).to_s}
-          end
-        end
-
+        list = []
+        each_page( result ) {|page|
+          list += page.body.toutf8.scan( /<a href="[^"]*">([A-Z]{3}\/[A-Z]{3}):([^<]*)<\/a><br>[^;]*;<font[^>]*>([^<]*)<\/font>([\d\.]*)[^\s@]*@([\d\.]*).*?<font[^>]*>([^<]*)<\/font>/m )
+        }
         tmp = {}
         list.each {|i|
           open_interest_id = i[1] 
@@ -588,6 +589,19 @@ module ClickClientScrap
           tmp[open_interest_id] = OpenInterest.new(open_interest_id, pair, sell_or_buy, count, rate, profit_or_loss  )
         }
         return tmp
+      end
+      
+      # すべてのページを列挙する。
+      def each_page( page )
+        current_page=1
+        while ( page ) 
+          yield page
+          current_page+=1
+          link_to_next = page.links.find{|i| 
+            i.text == current_page.to_s
+          }
+          page = link_to_next ?  @client.click( link_to_next ) : nil
+        end
       end
       
       #
@@ -632,6 +646,17 @@ module ClickClientScrap
       def to_pair( str )
         str.gsub( /\//, "" ).to_sym
       end
+
+      # 注文種別を注文種別コードに変換します。
+      def to_execution_expression( execution_expression )
+        if execution_expression == "指"
+          return ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
+        elsif execution_expression == "逆"
+          return ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
+        else
+          return ClickClientScrap::FX::EXECUTION_EXPRESSION_MARKET_ORDER
+        end
+      end
       
       # 注文種別を注文種別コードに変換します。
       def to_order_type_code( order_type )
@@ -668,7 +693,8 @@ module ClickClientScrap
     #=== レート
     Rate = Struct.new(:pair, :bid_rate, :ask_rate, :sell_swap, :buy_swap )
     #===注文
-    Order = Struct.new(:order_no, :trade_type, :order_type, :execution_expression, :sell_or_buy, :pair,  :count, :rate, :order_state )
+    Order = Struct.new(:order_no, :trade_type, :order_type, :execution_expression, :sell_or_buy, :pair,  
+      :count, :rate, :order_state, :stop_order_rate, :stop_order_execution_expression )
     #===注文結果
     OrderResult = Struct.new(:order_no )
     #===建玉
