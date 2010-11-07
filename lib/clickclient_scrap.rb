@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*- 
+
 begin
   require 'rubygems'
 rescue LoadError
@@ -47,7 +49,7 @@ module ClickClientScrap
     # 例) https://proxyhost.com:80
     #
     def initialize( proxy=ENV["http_proxy"], demo=false )
-      @client = WWW::Mechanize.new {|c|
+      @client = Mechanize.new {|c|
         # プロキシ
         if proxy 
           uri = URI.parse( proxy )
@@ -70,6 +72,7 @@ module ClickClientScrap
     #options:: オプション 
     #戻り値:: ClickClientScrap::FX::FxSession
     def fx_session( userid, password, options={}, &block )
+      
       page = @client.get(@host_name)
       ClickClientScrap::Client.error(page)  if page.forms.length <= 0
       form = page.forms.first
@@ -714,9 +717,9 @@ module ClickClientScrap
   end
 end
 
-class << WWW::Mechanize::Util
+class << Mechanize::Util
   def from_native_charset(s, code)
-    if WWW::Mechanize.html_parser == Nokogiri::HTML
+    if Mechanize.html_parser == Nokogiri::HTML
       return unless s
       Iconv.iconv(code, "UTF-8", s).join("") rescue s # エラーになった場合、変換前の文字列を返す
     else
