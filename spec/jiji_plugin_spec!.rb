@@ -1,4 +1,4 @@
-#!/usr/bin/ruby
+# -*- coding: utf-8 -*- 
 
 $: << "../lib"
 
@@ -42,21 +42,6 @@ describe "market order" do
       }
       sleep 1
       
-      3.times {
-        rates =  plugin.list_rates
-        pairs.each {|p|
-          # 利用可能とされたペアのレートが取得できていることを確認
-          p.name.should_not be_nil
-          p.trade_unit.should_not be_nil
-          rates[p.name].should_not be_nil
-          rates[p.name].bid.should_not be_nil
-          rates[p.name].ask.should_not be_nil
-          rates[p.name].sell_swap.should_not be_nil
-          rates[p.name].buy_swap.should_not be_nil
-        }
-        sleep 3
-      }
-      
       # 売り/買い
       sell = plugin.order( :EURJPY, :sell, 1 )      
       buy  = plugin.order( :EURJPY, :buy, 1 ) 
@@ -95,21 +80,6 @@ describe "market order" do
         rates[p.name].buy_swap.should_not be_nil
       }
       sleep 1
-      
-      3.times {
-        rates =  plugin.list_rates
-        pairs.each {|p|
-          # 利用可能とされたペアのレートが取得できていることを確認
-          p.name.should_not be_nil
-          p.trade_unit.should_not be_nil
-          rates[p.name].should_not be_nil
-          rates[p.name].bid.should_not be_nil
-          rates[p.name].ask.should_not be_nil
-          rates[p.name].sell_swap.should_not be_nil
-          rates[p.name].buy_swap.should_not be_nil
-        }
-        sleep 3
-      }
       
       # 売り/買い
       sell = plugin.order( :EURJPY, :sell, 1 )      
