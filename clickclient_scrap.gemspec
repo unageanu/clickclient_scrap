@@ -3,7 +3,7 @@ Gem::Specification.new do |spec|
   spec.version = "0.1.11"
   spec.summary = "click securities client library for ruby."
   spec.author = "Masaya Yamauchi"
-  spec.email = "y-masaya@red.hot.co.jp"
+  spec.email = "masaya.yamauchi@gmail.com"
   spec.homepage = "http://github.com/unageanu/clickclient_scrap/tree/master"
   spec.test_files = Dir.glob( "spec/**/*" )
   spec.files = [

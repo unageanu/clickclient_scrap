@@ -8,6 +8,7 @@ require 'mechanize'
 require 'date'
 require 'kconv'
 require 'set'
+require 'logger'
 
 #
 #=== クリック証券アクセスクライアント
@@ -40,7 +41,7 @@ module ClickClientScrap
   class Client
     # ホスト名
     DEFAULT_HOST_NAME = "https://sec-sso.click-sec.com/mf/"
-    DEFAULT_DEMO_HOST_NAME = "https://www.click-sec.com/m/demo/"
+    DEFAULT_DEMO_HOST_NAME = "https://fx-demo.click-sec.com/ygmo/servlet/login?FAGD=2"
     
     #
     #===コンストラクタ
@@ -59,6 +60,7 @@ module ClickClientScrap
       @client.keep_alive = false
       @client.max_history=0
       @client.user_agent_alias = 'Windows IE 7'
+      #@client.log = Logger.new("log.txt")
       @demo = demo
       @host_name = @demo ?  DEFAULT_DEMO_HOST_NAME : DEFAULT_HOST_NAME
     end
@@ -78,7 +80,9 @@ module ClickClientScrap
       form = page.forms.first
       form.j_username = userid
       form.j_password = password
-      result = @client.submit(form, form.buttons.first) 
+      form.WIN_NAME = "CLICK_FX_HOME_TRADE" if @demo
+      result = @client.submit(form, form.buttons.first)
+
       # デモサイトではjsによるリダイレクトは不要。
       if !@demo
         if result.body.toutf8 =~ /<META HTTP-EQUIV="REFRESH" CONTENT="0;URL=([^"]*)">/
@@ -203,7 +207,7 @@ module ClickClientScrap
       #戻り値:: 通貨ペアをキーとするClickClientScrap::FX::Rateのハッシュ。
       def list_rates
         result =  link_click( "1" )
-         if !@last_update_time_of_swaps \
+        if !@last_update_time_of_swaps \
            || Time.now.to_i - @last_update_time_of_swaps  > (@options[:swap_update_interval] || 60*60)
           @swaps  = list_swaps
           @last_update_time_of_swaps = Time.now.to_i
@@ -211,7 +215,7 @@ module ClickClientScrap
         reg = />([A-Z]+\/[A-Z]+)<\/a>[^\-\.\d]*?([\d]+\.[\d]+)\-[^\-\.\d]*([\d\.]+)/
         tokens = result.body.toutf8.scan( reg )
         ClickClientScrap::Client.error( result ) if !tokens || tokens.empty?
-        return  tokens.inject({}) {|r,l|
+        return tokens.inject({}) {|r,l|
              pair = to_pair( l[0] )
              swap = @swaps[pair]
              rate = FxSession.convert_rate "#{l[1]}-#{l[2]}"
@@ -638,10 +642,13 @@ module ClickClientScrap
       
       # ログアウトします。
       def logout
-        @client.click( @links.find {|i|
+        begin
+          @client.click( @links.find {|i|
             i.text == "\303\233\302\270\303\236\302\261\302\263\303\204" \
             || i.text == "ﾛｸﾞｱｳﾄ"
-        })
+          })
+        rescue
+        end
       end
       
     private
