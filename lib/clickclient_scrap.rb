@@ -364,22 +364,22 @@ module ClickClientScrap
           when ORDER_TYPE_MARKET_ORDER
             # 成り行き
             form["P003"] = unit.to_s # 取り引き数量
-            form["P002.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い  
+            set_sell_or_buy( form, sell_or_buy )
             form["P005"] = options[:slippage].to_s if ( options && options[:slippage] != nil ) # スリッページ
           when ORDER_TYPE_NORMAL
             # 指値
             form["P003"] = options[:rate].to_s # レート
             form["P005"] = unit.to_s # 取り引き数量
-            form["P002.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い
-            exp =  options[:execution_expression]
-            form["P004.0"] = exp  == ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER ? "2" : "1" #指値/逆指値
+            set_sell_or_buy( form, sell_or_buy )
+            exp = options[:execution_expression] == ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER ? "2" : "1"
+            form.radiobuttons_with(:name => 'P004.0', :value => exp )[0].check
             set_expiration( form,  options, "P008", "P009" ) # 有効期限
           when ORDER_TYPE_OCO
             # OCO
             form["P003"] = options[:rate].to_s # レート
             form["P005"] = options[:stop_order_rate].to_s # 逆指値レート
             form["P007"] = unit.to_s # 取り引き数量
-            form["P002.0"] = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い
+            set_sell_or_buy( form, sell_or_buy )
             set_expiration( form,  options, "P010", "P011" ) # 有効期限
           else
             raise "not supported yet."
@@ -418,6 +418,11 @@ module ClickClientScrap
           else
               form[input_type] = "2"
         end
+      end
+      
+      def set_sell_or_buy( form, sell_or_buy )
+        value = sell_or_buy == ClickClientScrap::FX::SELL ? "1" : "0" #売り/買い
+        form.radiobuttons_with(:name => 'P002.0', :value => value )[0].check
       end
       
       #
@@ -723,16 +728,4 @@ module ClickClientScrap
     )
   end
 end
-
-class << Mechanize::Util
-  def from_native_charset(s, code)
-    if Mechanize.html_parser == Nokogiri::HTML
-      return unless s
-      Iconv.iconv(code, "UTF-8", s).join("") rescue s # エラーになった場合、変換前の文字列を返す
-    else
-      return s       
-    end
-  end
-end
-
 
