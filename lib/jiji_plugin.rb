@@ -65,7 +65,7 @@ class ClickSecuritiesPlugin
     # 10s待っても取得できなければあきらめる
     20.times {|i|
       sleep 0.5
-      position = @session.list_open_interests.find {|i| !before.include?(i[0]) }
+      position = @session.list_open_interests.find {|inte| !before.include?(inte[0]) }
       break if position
     }
     raise "order fialed." unless position
