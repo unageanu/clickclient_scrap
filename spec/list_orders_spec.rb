@@ -24,7 +24,7 @@ describe "list_orders" do
         })
       }
       result = @s.list_orders(ClickClientScrap::FX::ORDER_CONDITION_ON_ORDER)
-      result.size.should == 20
+      expect(result.size).to eq 20
     }
   end
 end

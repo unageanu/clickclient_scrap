@@ -26,14 +26,14 @@ describe "market order" do
       #建玉一覧取得
       after = @s.list_open_interests
       positions = after.find_all {|i| !prev.include?(i[0]) }.map{|i| i[1] }
-      positions.length.should == 2 # 新規の建玉が2つ存在することを確認
+      expect(positions.length).to eq 2 # 新規の建玉が2つ存在することを確認
       positions.each {|p|
-        p.open_interest_id.should_not be_nil
-        p.pair.should_not be_nil
-        p.sell_or_buy.should_not be_nil
-        p.count.should == 1
-        p.rate.should_not be_nil
-        p.profit_or_loss.should_not be_nil
+        expect(p.open_interest_id).not_to be_nil
+        expect(p.pair).not_to be_nil
+        expect(p.sell_or_buy).not_to be_nil
+        expect(p.count).to eq 1
+        expect(p.rate).not_to be_nil
+        expect(p.profit_or_loss).not_to be_nil
       }
       
       # 決済注文
@@ -42,8 +42,8 @@ describe "market order" do
       sleep 1
       
       after_settle =  @s.list_open_interests
-      after_settle.key?( positions[0].open_interest_id ).should == false
-      after_settle.key?( positions[1].open_interest_id ).should == false
+      expect( after_settle.key?( positions[0].open_interest_id )).to eq false
+      expect( after_settle.key?( positions[1].open_interest_id )).to eq false
     }
   end
   
@@ -63,14 +63,14 @@ describe "market order" do
       #建玉一覧取得
       after = @s.list_open_interests
       positions = after.find_all {|i| !prev.include?(i[0]) }.map{|i| i[1] }
-      positions.length.should == 2 # 新規の建玉が2つ存在することを確認
+      expect(positions.length).to eq 2 # 新規の建玉が2つ存在することを確認
       positions.each {|p|
-        p.open_interest_id.should_not be_nil
-        p.pair.should_not be_nil
-        p.sell_or_buy.should_not be_nil
-        p.count.should == 2
-        p.rate.should_not be_nil
-        p.profit_or_loss.should_not be_nil
+        expect(p.open_interest_id).not_to be_nil
+        expect(p.pair).not_to be_nil
+        expect(p.sell_or_buy).not_to be_nil
+        expect(p.count).to eq 2
+        expect(p.rate).not_to be_nil
+        expect(p.profit_or_loss).not_to be_nil
       }
       
       # 決済注文
@@ -79,14 +79,14 @@ describe "market order" do
       sleep 1
       
       after_settle =  @s.list_open_interests
-      after_settle.key?( positions[0].open_interest_id ).should == true
-      after_settle.key?( positions[1].open_interest_id ).should == true
+      expect( after_settle.key?( positions[0].open_interest_id ) ).to eq true
+      expect( after_settle.key?( positions[1].open_interest_id ) ).to eq true
       
       @s.settle( positions[0].open_interest_id, 1 )
       @s.settle( positions[1].open_interest_id, 1 )
       after_settle =  @s.list_open_interests
-      after_settle.key?( positions[0].open_interest_id ).should == false
-      after_settle.key?( positions[1].open_interest_id ).should == false
+      expect( after_settle.key?( positions[0].open_interest_id ) ).to eq false
+      expect( after_settle.key?( positions[1].open_interest_id ) ).to eq false
     }
   end
   
@@ -108,14 +108,14 @@ describe "market order" do
       #建玉一覧取得
       after = @s.list_open_interests
       positions = after.find_all {|i| !prev.include?(i[0]) }.map{|i| i[1] }
-      positions.length.should == 8 # 新規の建玉が2つ存在することを確認
+      expect(positions.length).to eq 8 # 新規の建玉が2つ存在することを確認
       positions.each {|p|
-        p.open_interest_id.should_not be_nil
-        p.pair.should_not be_nil
-        p.sell_or_buy.should_not be_nil
-        p.count.should == 1
-        p.rate.should_not be_nil
-        p.profit_or_loss.should_not be_nil
+        expect(p.open_interest_id).not_to be_nil
+        expect(p.pair).not_to be_nil
+        expect(p.sell_or_buy).not_to be_nil
+        expect(p.count).to eq 1
+        expect(p.rate).not_to be_nil
+        expect(p.profit_or_loss).not_to be_nil
       }
       
       # 決済注文
@@ -126,7 +126,7 @@ describe "market order" do
       
       after_settle =  @s.list_open_interests
       positions.each {|p|
-        after_settle.key?( p.open_interest_id ).should == false
+        expect( after_settle.key?( p.open_interest_id ) ).to eq false
       }
     }
   end

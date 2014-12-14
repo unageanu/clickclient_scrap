@@ -13,3 +13,5 @@ require 'yaml'
 auth = YAML.load_file "#{File.dirname(__FILE__)}/../etc/auth.yaml"
 USER=auth["user"]
 PASS=auth["pass"]
+DEMO_USER=auth["demo_user"]
+DEMO_PASS=auth["demo_pass"]

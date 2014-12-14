@@ -17,18 +17,18 @@ describe "limit" do
         :expiration_type=>ClickClientScrap::FX::EXPIRATION_TYPE_TODAY
       })
       @order = @s.list_orders[@order_ids[0].order_no]
-      @order_ids[0].should_not be_nil
-      @order_ids[0].order_no.should_not be_nil
-      @order.should_not be_nil
-      @order.order_no.should == @order_ids[0].order_no
-      @order.trade_type.should == ClickClientScrap::FX::TRADE_TYPE_NEW
-      @order.execution_expression.should == ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
-      @order.sell_or_buy.should == ClickClientScrap::FX::BUY
-      @order.pair.should == ClickClientScrap::FX::EURJPY
-      @order.count.should == 1
-      @order.rate.should == @rates[ClickClientScrap::FX::EURJPY].ask_rate - 0.5
-      @order.stop_order_rate.should be_nil
-      @order.stop_order_execution_expression.should be_nil
+      expect(@order_ids[0]).not_to be_nil
+      expect(@order_ids[0].order_no).not_to be_nil
+      expect(@order).not_to be_nil
+      expect(@order.order_no).to eq @order_ids[0].order_no
+      expect(@order.trade_type).to eq ClickClientScrap::FX::TRADE_TYPE_NEW
+      expect(@order.execution_expression).to eq ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
+      expect(@order.sell_or_buy).to eq ClickClientScrap::FX::BUY
+      expect(@order.pair).to eq ClickClientScrap::FX::EURJPY
+      expect(@order.count).to eq 1
+      expect(@order.rate).to eq @rates[ClickClientScrap::FX::EURJPY].ask_rate - 0.5
+      expect(@order.stop_order_rate).to be_nil
+      expect(@order.stop_order_execution_expression).to be_nil
       @order.order_type= ClickClientScrap::FX::ORDER_TYPE_NORMAL
       
       #指値-売り
@@ -38,18 +38,18 @@ describe "limit" do
         :expiration_type=>ClickClientScrap::FX::EXPIRATION_TYPE_WEEK_END
       })
       @order = @s.list_orders[@order_ids[1].order_no]
-      @order_ids[1].should_not be_nil
-      @order_ids[1].order_no.should_not be_nil
-      @order.should_not be_nil
-      @order.order_no.should == @order_ids[1].order_no
-      @order.trade_type.should == ClickClientScrap::FX::TRADE_TYPE_NEW
-      @order.execution_expression.should == ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
-      @order.sell_or_buy.should == ClickClientScrap::FX::SELL
-      @order.pair.should == ClickClientScrap::FX::USDJPY
-      @order.count.should == 1
-      @order.rate.should == @rates[ClickClientScrap::FX::USDJPY].ask_rate + 0.5
-      @order.stop_order_rate.should be_nil
-      @order.stop_order_execution_expression.should be_nil
+      expect(@order_ids[1]).not_to be_nil
+      expect(@order_ids[1].order_no).not_to be_nil
+      expect(@order).not_to be_nil
+      expect(@order.order_no).to eq @order_ids[1].order_no
+      expect(@order.trade_type).to eq ClickClientScrap::FX::TRADE_TYPE_NEW
+      expect(@order.execution_expression).to eq ClickClientScrap::FX::EXECUTION_EXPRESSION_LIMIT_ORDER
+      expect(@order.sell_or_buy).to eq ClickClientScrap::FX::SELL
+      expect(@order.pair).to eq ClickClientScrap::FX::USDJPY
+      expect(@order.count).to eq 1
+      expect(@order.rate).to eq @rates[ClickClientScrap::FX::USDJPY].ask_rate + 0.5
+      expect(@order.stop_order_rate).to be_nil
+      expect(@order.stop_order_execution_expression).to be_nil
       @order.order_type= ClickClientScrap::FX::ORDER_TYPE_NORMAL
       
       #逆指値-買い
@@ -59,19 +59,19 @@ describe "limit" do
        :expiration_type=>ClickClientScrap::FX::EXPIRATION_TYPE_TODAY
       })
       @order = @s.list_orders[@order_ids[2].order_no]
-      @order_ids[2].should_not be_nil
-      @order_ids[2].order_no.should_not be_nil
+      expect(@order_ids[2]).not_to be_nil
+      expect(@order_ids[2].order_no).not_to be_nil
       @order = @s.list_orders[@order_ids[2].order_no]
-      @order.should_not be_nil
-      @order.order_no.should == @order_ids[2].order_no
-      @order.trade_type.should == ClickClientScrap::FX::TRADE_TYPE_NEW
-      @order.execution_expression.should == ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
-      @order.sell_or_buy.should == ClickClientScrap::FX::BUY
-      @order.pair.should == ClickClientScrap::FX::EURUSD
-      @order.count.should == 1
-      @order.rate.to_s.should == (@rates[ClickClientScrap::FX::EURUSD].ask_rate + 0.05).to_s
-      @order.stop_order_rate.should be_nil
-      @order.stop_order_execution_expression.should be_nil
+      expect(@order).not_to be_nil
+      expect(@order.order_no).to eq @order_ids[2].order_no
+      expect(@order.trade_type).to eq ClickClientScrap::FX::TRADE_TYPE_NEW
+      expect(@order.execution_expression).to eq ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
+      expect(@order.sell_or_buy).to eq ClickClientScrap::FX::BUY
+      expect(@order.pair).to eq ClickClientScrap::FX::EURUSD
+      expect(@order.count).to eq 1
+      expect(@order.rate.to_s).to eq( (@rates[ClickClientScrap::FX::EURUSD].ask_rate + 0.05).to_s)
+      expect(@order.stop_order_rate).to be_nil
+      expect(@order.stop_order_execution_expression).to be_nil
       @order.order_type= ClickClientScrap::FX::ORDER_TYPE_NORMAL
       
       #逆指値-売り
@@ -82,18 +82,18 @@ describe "limit" do
         :expiration_date=>Date.today+2 # 2日後
       })
       @order = @s.list_orders[@order_ids[3].order_no]
-      @order_ids[3].should_not be_nil
-      @order_ids[3].order_no.should_not be_nil
-      @order.should_not be_nil
-      @order.order_no.should == @order_ids[3].order_no
-      @order.trade_type.should == ClickClientScrap::FX::TRADE_TYPE_NEW
-      @order.execution_expression.should == ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
-      @order.sell_or_buy.should == ClickClientScrap::FX::SELL
-      @order.pair.should == ClickClientScrap::FX::GBPJPY
-      @order.count.should == 2
-      @order.rate.should == @rates[ClickClientScrap::FX::GBPJPY].ask_rate - 0.5
-      @order.stop_order_rate.should be_nil
-      @order.stop_order_execution_expression.should be_nil
+      expect(@order_ids[3]).not_to be_nil
+      expect(@order_ids[3].order_no).not_to be_nil
+      expect(@order).not_to be_nil
+      expect(@order.order_no).to eq @order_ids[3].order_no
+      expect(@order.trade_type).to eq ClickClientScrap::FX::TRADE_TYPE_NEW
+      expect(@order.execution_expression).to eq ClickClientScrap::FX::EXECUTION_EXPRESSION_REVERSE_LIMIT_ORDER
+      expect(@order.sell_or_buy).to eq ClickClientScrap::FX::SELL
+      expect(@order.pair).to eq ClickClientScrap::FX::GBPJPY
+      expect(@order.count).to eq 2
+      expect(@order.rate).to eq @rates[ClickClientScrap::FX::GBPJPY].ask_rate - 0.5
+      expect(@order.stop_order_rate).to be_nil
+      expect(@order.stop_order_execution_expression).to be_nil
       @order.order_type= ClickClientScrap::FX::ORDER_TYPE_NORMAL
     }
   end

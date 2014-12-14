@@ -30,15 +30,15 @@ describe "cancel_order" do
         @s.cancel_order(id.order_no)
         @order_ids.pop
       }
-      @s.list_orders(ClickClientScrap::FX::ORDER_CONDITION_ON_ORDER).size.should == 0
+      expect(@s.list_orders(ClickClientScrap::FX::ORDER_CONDITION_ON_ORDER).size).to eq 0
     }
   end
   
   it "削除対象が存在しない" do
     do_test {|s|
-      proc {
+      expect {
         @s.cancel_order("not found")
-      }.should raise_error( RuntimeError, "illegal order_no. order_no=not found" )
+      }.to raise_error( RuntimeError, "illegal order_no. order_no=not found" )
     }
   end
   
